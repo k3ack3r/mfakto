@@ -34,6 +34,7 @@ along with mfaktc (mfakto).  If not, see <http://www.gnu.org/licenses/>.
 #include "filelocking.h"
 #include "signal_handler.h"
 #include "mfakto.h"
+#include "output.h"
 #include "gpusieve.h"
 #ifndef _MSC_VER
 #include <sys/time.h>
@@ -50,35 +51,49 @@ extern cl_command_queue         commandQueue, commandQueuePrf;
 extern cl_context               context;
 extern cl_device_id            *devices;
 extern cl_program               program;
+extern cl_uint                  new_class;
 extern int run_gs_kernel15(cl_kernel kernel, cl_uint numblocks, cl_uint shared_mem_required, int75 k_base, cl_uint8 b_in, cl_uint shiftcount);
 extern int run_gs_kernel32(cl_kernel kernel, cl_uint numblocks, cl_uint shared_mem_required, int96 k_base, int192 b_preinit, cl_uint shiftcount);
 extern int run_kernel15(cl_kernel l_kernel, cl_uint exp, int75 k_base, int stream, cl_uint8 b_in, cl_mem res, cl_int shiftcount, cl_int bin_max);
 extern int run_kernel24(cl_kernel l_kernel, cl_uint exp, int72 k_base, int stream, int144 b_preinit, cl_mem res, cl_int shiftcount, cl_int bin_min63);
+extern int run_barrett_kernel32(cl_kernel l_kernel, cl_uint exp, int96 k_base, int stream, int192 b_preinit, cl_mem res, cl_int shiftcount, cl_int bin_min63);
 extern int run_kernel64(cl_kernel l_kernel, cl_uint exp, cl_ulong k_base, int stream, cl_ulong4 b_preinit, cl_mem res, cl_int bin_min63);
+extern "C" int class_needed(unsigned int expo, unsigned long long int k_min, int c);
+extern "C" unsigned long long int calculate_k(unsigned int exp, int bits);
 
 #define EXP 66362159
 
 int init_perftest(int devicenumber)
 {
   cl_uint i;
+  read_config(&mystuff); // to read VECTOR_SIZE and all defaults
   mystuff.mode = MODE_PERFTEST;
   mystuff.gpu_sieving = 0;  // inintialize CPU-sieving
-  mystuff.binfile[0] = '\0'; // disable binary caching
   mystuff.sieve_primes_min = 254;
   mystuff.sieve_primes = 5000;
   mystuff.sieve_primes_max = 1000000;
   mystuff.more_classes = 1;
   mystuff.num_classes  = 4620;
+#ifdef SIEVE_SIZE_LIMIT
+  mystuff.sieve_size = SIEVE_SIZE;
+  sieve_init();
+#else
   mystuff.sieve_size = (36<<13) - (36<<13) % (13*17*19*23);
+  sieve_init(mystuff.sieve_size, mystuff.sieve_primes_max);
+#endif
   mystuff.num_streams = 10;
+  mystuff.threads_per_grid_max = 2097152;
+  mystuff.sieve_primes_adjust = 0;
+  mystuff.force_rebuild = 1; // always rebuild from scratch while doing this test
 
-  init_CL(mystuff.num_streams, devicenumber);
-
+  init_CL(mystuff.num_streams, &devicenumber);
 //  i = (cl_uint)deviceinfo.maxThreadsPerBlock * deviceinfo.units * mystuff.vectorsize;
   i = 2048;
   while( (i * 2) <= mystuff.threads_per_grid_max) i = i * 2;
   mystuff.threads_per_grid = min(i, (cl_uint)deviceinfo.maxThreadsPerGrid);
 
+  set_gpu_type();
+  load_kernels(&devicenumber);
   init_CLstreams(0);  // alloc buffers
 
   register_signal_handler(&mystuff);
@@ -302,13 +317,12 @@ Sieved out:   63.63%  65.94%  67.95%  69.73%  71.31%  72.72%  74.00%  75.16%  76
 
   for (j=0;j<nss; j++)
   {
-    sieve_free();
 #ifdef SIEVE_SIZE_LIMIT
-    sieve_init();
     if (j>=3) break; // quit after 3 equal loops if we can't dynamically set the sieve size anyway
     sieve_init_class(EXP, k+=1000000, 1000000);
     printf("\n%6d kiB  ", SIEVE_SIZE/8192+1);
 #else
+    sieve_free();
     cl_uint tmp=m*ssizes[j];
     sieve_init(tmp, 1000000);
     sieve_init_class(EXP, k+=1000000, 1000000);
@@ -375,7 +389,6 @@ Sieved out:   63.63%  65.94%  67.95%  69.73%  71.31%  72.72%  74.00%  75.16%  76
     printf(" %7.1f", peak[ii]*(last_elem[ii]/(mystuff.threads_per_grid*j) -1));
   }
 
-
   printf("\n\n");
   return 0;
 }
@@ -425,16 +438,14 @@ int test_copy(cl_uint par)
             std::cout<<"Error " << status << " (" << ClErrorString(status) << "): Copying h_ktab(clEnqueueWriteBuffer)\n";
             return RET_ERROR;
         }
-
     }
     status = clFinish(commandQueuePrf);
   }
 
-  time1 = 0.0;
+  timer_init(&timer);
 
   for (j=0; j<par; j++)
   {
-    timer_init(&timer);
     for (i=0; i<10; i++)
     {
         status = clEnqueueWriteBuffer(commandQueue,
@@ -452,11 +463,10 @@ int test_copy(cl_uint par)
             std::cout<<"Error " << status << " (" << ClErrorString(status) << "): Copying h_ktab(clEnqueueWriteBuffer)\n";
             return RET_ERROR;
         }
-
     }
     status = clFinish(commandQueue);
-    time1  += (double)timer_diff(&timer);
   }
+  time1 = (double)timer_diff(&timer);
   printf("\n  Standard copy, standard queue:\n%8d MB in %6.1f ms (%6.1f MB/s) (real)\n",
       (int)(j*10*size/1024/1024), time1/1000.0, (double)(j*10*size)/time1);
 
@@ -586,14 +596,12 @@ int test_gpu_sieve(cl_uint par)
   struct timeval timer;
   double time1;
   cl_uint i;
-  cl_ulong k;
+  cl_ulong k = 9876543210;
 
   // 50 is a reasonable number that does not usually crash the driver
   //par = 50;
 
   printf("\n4. GPU sieve, %d iterations each\n", par);
-
-  k = 9876543210;
 
   timer_init(&timer);
     init_CLstreams(0);  // runs gpusieve_init(&mystuff, context);
@@ -723,7 +731,7 @@ int test_gpu_sieve(cl_uint par)
   int peak_index[MAX_NUM_SPS]={0};
   double gss_sum=0.0;
 
-  printf("GPU sieve raw rate (input rate M/s)\nSievePrimes:");
+  printf("GPU sieve raw rate (input rate M/s)\nSievePrimes: ");
   for(ii=0; ii<nsp; ii++)
   {
     sprimes[ii] = min(sprimes[ii], GPU_SIEVE_PRIMES_MAX);
@@ -846,6 +854,453 @@ int test_gpu_sieve(cl_uint par)
   return 0;
 }
 
+void insert_time(double time1, double time2[], cl_uint num, cl_uint kernel_idxs[], cl_uint used_size)
+// arrays have to be one larger than used_size
+{
+  cl_uint i, j;
+
+  for (i=0; i<used_size; ++i)
+  {
+    if (time2[i] >= time1) break;
+  }
+
+  for (j=used_size; j>i; --j)
+  {
+    time2[j] = time2[j-1];
+    kernel_idxs[j] = kernel_idxs[j-1];
+  }
+
+  time2[i] = time1;
+  kernel_idxs[i] = num;
+}
+
+int test_cpu_tf_kernels(cl_uint par)
+{
+  static cl_uint num_test=0; // use this counter to cycle through the FC blocks to avoid successive runs blocking each other
+  timeval  timer;
+  double   time1, time2[UNKNOWN_KERNEL-_71BIT_MUL24], ghzdt, ghz;
+  cl_uint  use_kernel, num_loops, i, idxs[UNKNOWN_KERNEL-_71BIT_MUL24];
+  double   ghzd = primenet_ghzdays(mystuff.exponent, mystuff.bit_min, mystuff.bit_min + 1);
+  int72    k_base;
+  int144   b_preinit = {0};
+  int192   b_192 = {0};
+  cl_uint8 b_in = {{0}};
+  cl_uint  shiftcount, ln2b, status;
+  cl_ulong num_fcs, b_preinit_lo, b_preinit_mid, b_preinit_hi;
+  cl_ulong k = calculate_k(mystuff.exponent,mystuff.bit_min);
+
+  new_class=1; // tell run_kernel to re-submit the one-time kernel arguments
+  /* set result array to 0 */
+  memset(mystuff.h_RES,0,32 * sizeof(int));
+  status = clEnqueueWriteBuffer(QUEUE,
+                mystuff.d_RES,
+                CL_TRUE,          // Wait for completion
+                0,
+                32 * sizeof(int),
+                mystuff.h_RES,
+                0,
+                NULL,
+                NULL);
+  if(status != CL_SUCCESS)
+  {
+    std::cout<<"Error " << status << " (" << ClErrorString(status) << "): Copying h_RES(clEnqueueWriteBuffer)\n";
+    return RET_ERROR; // # factors found ;-)
+  }
+  shiftcount=10;  // no exp below 2^10 ;-)
+  while((1ULL<<shiftcount) < (unsigned long long int)mystuff.exponent)shiftcount++;
+#ifdef DETAILED_INFO
+  printf("bits in exp %u: %u, ", mystuff->exponent, shiftcount);
+#endif
+  shiftcount -= 6; // all kernels can handle 5 bits of pre-shift (max 2^63)
+  ln2b = mystuff.exponent >> shiftcount;
+  // some kernels may actually accept a higher preprocessed value
+  // but it's hard to find the exact limit, and mfakto already had
+  // a bug with the precalculation being too high
+  // Therefore: play it safe and just precalc as far as the algorithm including modulus would go
+
+  while (ln2b < mystuff.bit_max_stage)
+  {
+    shiftcount--;
+    ln2b = mystuff.exponent >> shiftcount;
+  }
+#ifdef DETAILED_INFO
+  printf("remaining shiftcount = %d, ln2b = %d\n", shiftcount, ln2b);
+#endif
+  b_preinit_hi=0;b_preinit_mid=0;b_preinit_lo=0;
+// set the pre-initriables in all sizes for all possible kernels
+  {
+    if     (ln2b<24 ){fprintf(stderr, "Pre-init (%u) too small\n", ln2b); return RET_ERROR;}      // should not happen
+    else if(ln2b<48 )b_preinit.d1=1<<(ln2b-24);   // should not happen
+    else if(ln2b<72 )b_preinit.d2=1<<(ln2b-48);
+    else if(ln2b<96 )b_preinit.d3=1<<(ln2b-72);
+    else if(ln2b<120)b_preinit.d4=1<<(ln2b-96);
+    else             b_preinit.d5=1<<(ln2b-120);  // b_preinit = 2^ln2b
+  }
+
+  { // skip the "lowest" 4 levels, so that uint8 is sufficient for 12 components of int180
+    if     (ln2b<60 ){fprintf(stderr, "Pre-init (%u) too small\n", ln2b); return RET_ERROR;}      // should not happen
+    else if(ln2b<75 )b_in.s[0]=1<<(ln2b-60);
+    else if(ln2b<90 )b_in.s[1]=1<<(ln2b-75);
+    else if(ln2b<105)b_in.s[2]=1<<(ln2b-90);
+    else if(ln2b<120)b_in.s[3]=1<<(ln2b-105);
+    else if(ln2b<135)b_in.s[4]=1<<(ln2b-120);
+    else if(ln2b<150)b_in.s[5]=1<<(ln2b-135);
+    else if(ln2b<165)b_in.s[6]=1<<(ln2b-150);
+    else             b_in.s[7]=1<<(ln2b-165);
+  }
+
+
+  {
+    if     (ln2b<32 )b_192.d0=1<< ln2b;       // should not happen
+    else if(ln2b<64 )b_192.d1=1<<(ln2b-32);   // should not happen
+    else if(ln2b<96 )b_192.d2=1<<(ln2b-64);
+    else if(ln2b<128)b_192.d3=1<<(ln2b-96);
+    else if(ln2b<160)b_192.d4=1<<(ln2b-128);
+    else             b_192.d5=1<<(ln2b-160);  // b_preinit = 2^ln2b
+  }
+
+  {
+    if     (ln2b<64 )b_preinit_lo = 1ULL<< ln2b;
+    else if(ln2b<128)b_preinit_mid= 1ULL<<(ln2b-64);
+    else             b_preinit_hi = 1ULL<<(ln2b-128); // b_preinit = 2^ln2b
+  }
+
+  // combine for more efficient passing of parameters
+  cl_ulong4 b_preinit4 = {{b_preinit_lo, b_preinit_mid, b_preinit_hi, (cl_ulong)shiftcount-1}};
+
+  printf("\nexponent=%u ... calibrating\r", mystuff.exponent); fflush(stdout);
+  // calibrate to the device so we have ~ 2..4 seconds per kernel (at default with par = 10)
+  use_kernel = BARRETT79_MUL32;
+
+  timer_init(&timer);
+  if ((use_kernel == _71BIT_MUL24) || (use_kernel == _63BIT_MUL24))
+  {
+    k_base.d0 =  k & 0xFFFFFF;
+    k_base.d1 = (k >> 24) & 0xFFFFFF;
+    k_base.d2 =  k >> 48;
+    status = run_kernel24(kernel_info[use_kernel].kernel, mystuff.exponent, k_base, num_test++ % mystuff.num_streams, b_preinit, mystuff.d_RES, shiftcount, mystuff.bit_min-63);
+  }
+  else if (((use_kernel >= BARRETT73_MUL15) && (use_kernel <= BARRETT74_MUL15)) || (use_kernel == MG88))
+  {
+    int75 k_base;
+    k_base.d0 =  k & 0x7FFF;
+    k_base.d1 = (k >> 15) & 0x7FFF;
+    k_base.d2 = (k >> 30) & 0x7FFF;
+    k_base.d3 = (k >> 45) & 0x7FFF;
+    k_base.d4 =  k >> 60;
+    status = run_kernel15(kernel_info[use_kernel].kernel, mystuff.exponent, k_base, num_test++ % mystuff.num_streams, b_in, mystuff.d_RES, shiftcount, mystuff.bit_max_stage-65);
+  }
+  else if (((use_kernel >= BARRETT79_MUL32) && (use_kernel <= BARRETT87_MUL32)) || (use_kernel == MG62))
+  {
+    int96 k_base;
+    k_base.d0 = (cl_uint) k;
+    k_base.d1 = k >> 32;
+    k_base.d2 = 0;
+    status = run_barrett_kernel32(kernel_info[use_kernel].kernel, mystuff.exponent, k_base, num_test++ % mystuff.num_streams, b_192, mystuff.d_RES, shiftcount, mystuff.bit_max_stage-65);
+  }
+  else
+  {
+    status = run_kernel64(kernel_info[use_kernel].kernel, mystuff.exponent, k, num_test++ % mystuff.num_streams, b_preinit4, mystuff.d_RES, mystuff.bit_min-63);
+  }
+  if(status != CL_SUCCESS)
+  {
+    std::cerr<< "Error " << status << " (" << ClErrorString(status) << "): Starting kernel " << kernel_info[use_kernel].kernelname << ". (run_kernel)\n";
+    return RET_ERROR;
+  }
+  clFinish(QUEUE);
+  time1 = (double)timer_diff(&timer);
+//  printf("%llu FCs, %f ms\n", num_fcs, time1/1000.0);
+  num_loops = 1 + (cl_uint)(200000.0*par/time1); // run for about 2 seconds when par==10
+  num_fcs = (cl_ulong)num_loops*mystuff.h_ktab[0][mystuff.threads_per_grid-1];
+  printf("exponent=%u, %lldM FCs (sieved: %lldM FCs) each, ",
+    mystuff.exponent, num_fcs >> 20, ((cl_ulong)num_loops*mystuff.threads_per_grid)>>20);
+  // this single test is worth so many GHz-days
+  ghzdt = (double) num_fcs / k * 4620 / 960 * ghzd;
+  printf("k=%llu, %f GHz-days (assignment), %f GHz-days (per test): ", k, ghzd, ghzdt); fflush(stdout);
+  for (use_kernel = _71BIT_MUL24; use_kernel < UNKNOWN_KERNEL; use_kernel++)
+  {
+    new_class=1; // tell run_kernel to re-submit the one-time kernel arguments
+    timer_init(&timer);
+    for (i=0; i<num_loops; ++i)
+    {
+      if ((use_kernel == _71BIT_MUL24) || (use_kernel == _63BIT_MUL24))
+      {
+        k_base.d0 =  k & 0xFFFFFF;
+        k_base.d1 = (k >> 24) & 0xFFFFFF;
+        k_base.d2 =  k >> 48;
+        status = run_kernel24(kernel_info[use_kernel].kernel, mystuff.exponent, k_base, num_test++ % mystuff.num_streams, b_preinit, mystuff.d_RES, shiftcount, mystuff.bit_min-63);
+      }
+      else if (((use_kernel >= BARRETT73_MUL15) && (use_kernel <= BARRETT74_MUL15)) || (use_kernel == MG88))
+      {
+        int75 k_base;
+        k_base.d0 =  k & 0x7FFF;
+        k_base.d1 = (k >> 15) & 0x7FFF;
+        k_base.d2 = (k >> 30) & 0x7FFF;
+        k_base.d3 = (k >> 45) & 0x7FFF;
+        k_base.d4 =  k >> 60;
+        status = run_kernel15(kernel_info[use_kernel].kernel, mystuff.exponent, k_base, num_test++ % mystuff.num_streams, b_in, mystuff.d_RES, shiftcount, mystuff.bit_max_stage-65);
+      }
+      else if (((use_kernel >= BARRETT79_MUL32) && (use_kernel <= BARRETT87_MUL32)) || (use_kernel == MG62))
+      {
+        int96 k_base;
+        k_base.d0 = (cl_uint) k;
+        k_base.d1 = k >> 32;
+        k_base.d2 = 0;
+        status = run_barrett_kernel32(kernel_info[use_kernel].kernel, mystuff.exponent, k_base, num_test++ % mystuff.num_streams, b_192, mystuff.d_RES, shiftcount, mystuff.bit_max_stage-65);
+      }
+      else
+      {
+        status = run_kernel64(kernel_info[use_kernel].kernel, mystuff.exponent, k, num_test++ % mystuff.num_streams, b_preinit4, mystuff.d_RES, mystuff.bit_min-63);
+      }
+      if(status != CL_SUCCESS)
+      {
+        std::cerr<< "Error " << status << " (" << ClErrorString(status) << "): Starting kernel " << kernel_info[use_kernel].kernelname << ". (run_kernel)\n";
+      }
+    }
+    clFinish(QUEUE);
+    time1 = (double)timer_diff(&timer);
+    putchar('.'); fflush(stdout);
+    insert_time(time1, time2, use_kernel, idxs, use_kernel - _71BIT_MUL24);
+    if (mystuff.quit) break;
+  }
+
+  for (i=0; i < use_kernel - _71BIT_MUL24; ++i)
+  {
+    ghz = ghzdt * 86400000000.0 / time2[i];
+    printf("\n%17s [%u-%u]: %8.2f ms ==> %8.2fM (%8.2fM) FCs/s ==> %7.2f GHz-days/day",
+        kernel_info[idxs[i]].kernelname, kernel_info[idxs[i]].bit_min, kernel_info[idxs[i]].bit_max,
+        time2[i]/1000.0, num_fcs/time2[i], (num_loops*mystuff.threads_per_grid)/time2[i], ghz);
+  }
+
+  printf("\n\nResulting speed for M%u:\nbit_min - bit_max  GHz-days/day  kernelname\n", mystuff.exponent);
+  cl_uint bitlevels[100];
+
+  cl_uint last_kernel = UNKNOWN_KERNEL;
+  double last_ghz;
+  cl_uint bitlevel;
+  for (bitlevel=10; bitlevel<100; ++bitlevel)
+  {
+    bitlevels[bitlevel] = UNKNOWN_KERNEL;
+    for (i=0; i < use_kernel - _71BIT_MUL24; ++i)
+    {
+      mystuff.bit_min = bitlevel;
+      mystuff.bit_max_stage = bitlevel + 1;
+      if (kernel_possible(idxs[i], &mystuff))
+      {
+        last_ghz = ghz;
+        ghz = ghzdt * 86400000000.0 / time2[i];
+        bitlevels[bitlevel] = idxs[i];
+        break;
+      }
+    }
+
+    if (bitlevels[bitlevel] != last_kernel)
+    {
+      if (last_kernel != UNKNOWN_KERNEL)
+        printf("%7u  %12.3f  %-20s\n", bitlevel, last_ghz, kernel_info[last_kernel].kernelname);
+      last_kernel = bitlevels[bitlevel];
+      if (last_kernel != UNKNOWN_KERNEL)
+        printf("%7u - ", bitlevel);
+    }
+  }
+  return 0;
+}
+
+int test_gpu_tf_kernels(cl_uint par)
+{
+  struct timeval timer;
+  double time1, time2[UNKNOWN_GS_KERNEL-BARRETT79_MUL32_GS], ghzdt, ghz;
+  cl_uint i, idxs[UNKNOWN_GS_KERNEL-BARRETT79_MUL32_GS];
+  cl_uint use_class=0;
+  cl_ulong k = calculate_k(mystuff.exponent,mystuff.bit_min);
+  cl_ulong num_fcs = mystuff.gpu_sieve_size - 1; //start with one full sieve block
+  cl_uint use_kernel;
+  double ghzd = primenet_ghzdays(mystuff.exponent, mystuff.bit_min, mystuff.bit_min + 1);
+
+  mystuff.threads_per_grid = 256;
+
+  cl_uint exp_save = mystuff.exponent;
+  mystuff.exponent = 0;
+  run_calc_bit_to_clear(0, 0, NULL, 0); // reset the internal static so it will copy the exponent to the device again.
+  mystuff.exponent = exp_save;
+  gpusieve_init_exponent(&mystuff);
+  while(!class_needed(mystuff.exponent, k, use_class)) use_class++;
+  gpusieve_init_class(&mystuff, k+use_class);
+
+  printf("\n exponent=%u ... calibrating\r", mystuff.exponent); fflush(stdout);
+  // calibrate to the device so we have ~ 2..4 seconds per kernel (at default with par = 10)
+  do
+  {
+    timer_init(&timer);
+    tf_class_opencl (k+use_class, k+use_class+num_fcs*mystuff.num_classes, &mystuff, BARRETT79_MUL32_GS);
+    time1 = (double)timer_diff(&timer);
+//  printf("%llu FCs, %f ms\n", num_fcs, time1/1000.0);
+    num_fcs <<=1;
+  } while (time1 < 100000.0*par);
+
+  printf("exponent=%u, %lldM FCs each, ", mystuff.exponent, num_fcs>>20);
+  // this single test is worth so many GHz-days
+  ghzdt = (double) num_fcs / k * 4620 / 960 * ghzd;
+  printf("k=%llu, %f GHz-days (assignment), %f GHz-days (per test): ", k, ghzd, ghzdt); fflush(stdout);
+  for (use_kernel = BARRETT79_MUL32_GS; use_kernel < UNKNOWN_GS_KERNEL; use_kernel++)
+  {
+    timer_init(&timer);
+    tf_class_opencl (k+use_class, k+use_class+num_fcs*mystuff.num_classes, &mystuff, (GPUKernels)use_kernel);
+    time1 = (double)timer_diff(&timer);
+    putchar('.'); fflush(stdout);
+    insert_time(time1, time2, use_kernel, idxs, use_kernel - BARRETT79_MUL32_GS);
+    if (mystuff.quit) break;
+  }
+
+  for (i=0; i < use_kernel - BARRETT79_MUL32_GS; ++i)
+  {
+    ghz = ghzdt * 86400000000.0 / time2[i];
+    printf("\n%20s [%u-%u]: %8.2f ms ==> %8.2fM FCs/s ==> %7.2f GHz-days/day",
+        kernel_info[idxs[i]].kernelname, kernel_info[idxs[i]].bit_min, kernel_info[idxs[i]].bit_max,
+        time2[i]/1000.0, num_fcs/time2[i], ghz);
+  }
+
+  printf("\n\nResulting speed for M%u:\nbit_min - bit_max  GHz-days/day  kernelname\n", mystuff.exponent);
+  cl_uint bitlevels[100];
+
+  cl_uint last_kernel = UNKNOWN_KERNEL;
+  double last_ghz;
+  cl_uint bitlevel;
+  for (bitlevel=10; bitlevel<100; ++bitlevel)
+  {
+    bitlevels[bitlevel] = UNKNOWN_KERNEL;
+    for (i=0; i < use_kernel - BARRETT79_MUL32_GS; ++i)
+    {
+      mystuff.bit_min = bitlevel;
+      mystuff.bit_max_stage = bitlevel + 1;
+      if (kernel_possible(idxs[i], &mystuff))
+      {
+        last_ghz = ghz;
+        ghz = ghzdt * 86400000000.0 / time2[i];
+        bitlevels[bitlevel] = idxs[i];
+        break;
+      }
+    }
+
+    if (bitlevels[bitlevel] != last_kernel)
+    {
+      if (last_kernel != UNKNOWN_KERNEL)
+        printf("%7u  %12.3f  %-20s\n", bitlevel, last_ghz, kernel_info[last_kernel].kernelname);
+      last_kernel = bitlevels[bitlevel];
+      if (last_kernel != UNKNOWN_KERNEL)
+        printf("%7u - ", bitlevel);
+    }
+  }
+  return 0;
+}
+
+int test_tf_kernels(cl_uint par, int devicenumber)
+{
+  unsigned int i;
+
+  cleanup_CL(); // reinit from scratch
+
+  // use the configured settings incl. gpu_sieving
+  mystuff.verbosity = 0; // don't show the loading
+  read_config(&mystuff);
+
+  cl_uint exps[MAX_NUM_SPS];
+  cl_uint nexp=read_array(mystuff.inifile, (char *) "TestExponents", MAX_NUM_SPS, exps);
+  if (nexp < 1)
+  {
+    fprintf(stderr, "  Could not read TestExponents from %s - not testing TF kernels\n", mystuff.inifile);
+    return -1;
+  }
+
+  if(init_CL(mystuff.num_streams, &devicenumber)!=CL_SUCCESS)
+  {
+    printf("ERROR: init_CL(%d, %d) failed\n", mystuff.num_streams, devicenumber);
+    return ERR_INIT;
+  }
+  set_gpu_type();
+  if (load_kernels(&devicenumber)!=CL_SUCCESS)
+  {
+    printf("ERROR: load_kernels(%d) failed\n", devicenumber);
+    return ERR_INIT;
+  }
+  if (init_CLstreams(0))
+  {
+    printf("ERROR: init_CLstreams (malloc buffers?) failed\n");
+    return ERR_MEM;
+  }
+
+  if (mystuff.gpu_sieving == 1)
+  {
+    printf("\n 5. GPU tf kernels\n");
+    for (i=0; i<nexp; ++i)
+    {
+      mystuff.bit_min = 68;
+      mystuff.bit_max_assignment = 69;
+      mystuff.bit_max_stage = 69;
+      mystuff.exponent=exps[i];
+      test_gpu_tf_kernels((cl_uint) par);
+      if (mystuff.quit) break;
+    }
+  }
+  else
+  {
+    printf("5. TF kernels (w/ CPU sieve)\n");
+    cl_ulong k = calculate_k(mystuff.exponent,mystuff.bit_min);
+    int status;
+
+    sieve_free();
+#ifdef SIEVE_SIZE_LIMIT
+    sieve_init();
+    sieve_init_class(exps[0], k+=1000000, mystuff.sieve_primes);
+#else
+    cl_uint tmp=3*13*17*19*23;
+    sieve_init(tmp, 1000000);
+    sieve_init_class(exps[0], k+=1000000, mystuff.sieve_primes);
+#endif
+    mystuff.threads_per_grid = mystuff.threads_per_grid_max;
+    if(mystuff.threads_per_grid > deviceinfo.maxThreadsPerGrid)
+    {
+      mystuff.threads_per_grid = (cl_uint)deviceinfo.maxThreadsPerGrid;
+    }
+    size_t size = mystuff.threads_per_grid * sizeof(int);
+
+    // use one sieved block for the whole test
+    mystuff.threads_per_grid -= mystuff.threads_per_grid % (mystuff.vectorsize * deviceinfo.maxThreadsPerBlock);
+    mystuff.sieve_primes_upper_limit = mystuff.sieve_primes_max;
+    for (i=0; i<mystuff.num_streams; i++)
+    {
+      sieve_candidates(mystuff.threads_per_grid, mystuff.h_ktab[i], mystuff.sieve_primes); // use all blocks alternatingly, but always with the same content
+      status = clEnqueueWriteBuffer(QUEUE,
+                mystuff.d_ktab[i],
+                CL_FALSE,  // don't wait here, test_cpu_tf_kernels copies RES in wait mode
+                0,
+                size,
+                mystuff.h_ktab[i],
+                0,
+                NULL,
+                &mystuff.copy_events[i]);
+
+      if(status != CL_SUCCESS)
+      {
+          std::cout<<"Error " << status << " (" << ClErrorString(status) << "): Copying h_ktab[" << i << "] (clEnqueueWriteBuffer)\n";
+      }
+    }
+
+    for (i=0; i<nexp; ++i)
+    {
+      mystuff.bit_min = 68;
+      mystuff.bit_max_assignment = 69;
+      mystuff.bit_max_stage = 69;
+      mystuff.exponent=exps[i];
+      test_cpu_tf_kernels((cl_uint) par);
+      if (mystuff.quit) break;
+    }
+    printf("\nNote, the calculated GHz-days/day assume sufficiently fast CPU sieve with SievePrimes=%u.\n", mystuff.sieve_primes);  
+  }
+
+  return 0;
+}
+
 int init_gpu_test(int devicenumber)
 {
   cleanup_CL();
@@ -858,10 +1313,12 @@ int init_gpu_test(int devicenumber)
   mystuff.bit_min = 71;
   mystuff.bit_max_stage = mystuff.bit_max_assignment = 72;
   mystuff.gpu_sieving = 1;
-
+  mystuff.flush = 0;
 
   printf("\nReinitializing with gpu_sieving enabled.\n");
-  return init_CL(mystuff.num_streams, devicenumber);
+  init_CL(mystuff.num_streams, &devicenumber);
+  set_gpu_type();
+  return load_kernels(&devicenumber);
 }
 
 #ifdef __cplusplus
@@ -880,19 +1337,7 @@ int perftest(int par, int devicenumber)
 
   if (par == 0) par=10;
 
-  printf("Generate list of the first 1000000 primes: ");
-
-  timer_init(&timer);
-#ifdef SIEVE_SIZE_LIMIT
-  sieve_init();
-#else
-  sieve_init(mystuff.sieve_size, mystuff.sieve_primes_max);
-#endif
-  time1 = (double)timer_diff(&timer);
-  printf("%.2f ms\n\n", time1/1000.0);
-  if (mystuff.quit) exit(1);
-
-  printf("Generate list of the first %u primes for GPU sieving: ", GPU_SIEVE_PRIMES_MAX);
+  printf("Generate list of the first %u primes: ", GPU_SIEVE_PRIMES_MAX);
   cl_uint *p = (cl_uint *)malloc(sizeof(cl_uint)* GPU_SIEVE_PRIMES_MAX );
   timer_init(&timer);
 
@@ -921,14 +1366,8 @@ int perftest(int par, int devicenumber)
   // 4. kernels
   test_gpu_sieve((cl_uint)par);
 
-  printf("5. mfakto_cl_71 kernel\n  soon\n");
-
-  printf("6. barrett_79 kernel\n  soon\n");
-
-  printf("7. barrett_92 kernel\n  soon\n");
-
-  cleanup_CL();
-  sieve_free();
+  // 5. TF kernels
+  test_tf_kernels((cl_uint)par, devicenumber);
 
   return 0;
 }
@@ -980,7 +1419,7 @@ void CL_test(cl_int devnumber)
         {
           std::cerr << "Error " << status << " (" << ClErrorString(status) << "): clGetPlatformInfo(VENDOR)\n";
         }
-        std::cout << "OpenCL Platform " << i+1 << "/" << numplatforms << ": " << buf;
+        std::cout << "OpenCL Platform " << (i+1) << "/" << numplatforms << ": " << buf;
 
         status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION,
                         sizeof(buf), buf, NULL);
@@ -1008,7 +1447,7 @@ void CL_test(cl_int devnumber)
       {
         platform = platformlist[i];
       }
-      std::cout << "OpenCL Platform " << i+1 << "/" << numplatforms << ": " << buf;
+      std::cout << "OpenCL Platform " << (i+1) << "/" << numplatforms << ": " << buf;
 
       status = clGetPlatformInfo(platformlist[i], CL_PLATFORM_VERSION,
                         sizeof(buf), buf, NULL);
@@ -1187,7 +1626,7 @@ void CL_test(cl_int devnumber)
     commandQueue = clCreateCommandQueue(context, devices[devnumber], props, &status);
     if(status != CL_SUCCESS)
     {
-      std::cerr << "Error " << status << " (" << ClErrorString(status) << "): clCreateCommandQueue(dev#" << devnumber+1 << ")\n";
+      std::cerr << "Error " << status << " (" << ClErrorString(status) << "): clCreateCommandQueue(dev#" << (devnumber+1) << ")\n";
     }
     else
       printf("\nINFO: Device does not support out-of-order operations. Fallback to in-order queues.\n");
@@ -1198,7 +1637,7 @@ void CL_test(cl_int devnumber)
   commandQueuePrf = clCreateCommandQueue(context, devices[devnumber], props, &status);
   if(status != CL_SUCCESS)
   {
-    std::cerr << "Error " << status << " (" << ClErrorString(status) << "): clCreateCommandQueuePrf(dev#" << devnumber+1 << ")\n";
+    std::cerr << "Error " << status << " (" << ClErrorString(status) << "): clCreateCommandQueuePrf(dev#" << (devnumber+1) << ")\n";
   }
 
   size_t size;
@@ -1355,12 +1794,8 @@ if (mystuff.more_classes == 1)  strcat(program_options, " -DMORE_CLASSES");
   long long unsigned int lo=25;
   long long unsigned int q=3<<23;
   cl_float qr=0.9998f/(cl_float)q;
-  long long unsigned int res_hi;
-  long long unsigned int res_lo;
 
   cl_event in_evt, mod_evt, res_evt;
-
-  res_hi = res_lo = 0;
 
   status = clSetKernelArg(kernel_info[_TEST_MOD_].kernel,
                     0,

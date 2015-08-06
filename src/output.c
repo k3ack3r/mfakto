@@ -74,18 +74,54 @@ Enough space is
 
 void print_dez72(int96 a, char *buf)
 {
-  int192 tmp;
+  int96 tmp;
 
-  tmp.d5 = 0;
-  tmp.d4 = 0;
-  tmp.d3 = 0;
   tmp.d2 =                 a.d2 >> 16;
   tmp.d1 = (a.d2 << 16) + (a.d1 >>  8);
   tmp.d0 = (a.d1 << 24) +  a.d0;
 
-  print_dez192(tmp, buf);
+  print_dez96(tmp, buf);
 }
 
+
+void print_dez90(int96 a, char *buf)
+{
+  int96 tmp;
+
+  tmp.d2 =                 a.d2 >> 4;
+  tmp.d1 = (a.d2 << 28) + (a.d1 >> 2);
+  tmp.d0 = (a.d1 << 30) +  a.d0;
+
+  print_dez96(tmp, buf);
+}
+
+
+void print_dez96(int96 a, char *buf)
+{
+  char digit[58];
+  int digits=0,carry,i=0;
+  cl_ulong tmp;
+
+  while((a.d0!=0 || a.d1!=0 || a.d2!=0) && digits<58)
+  {
+                                              carry = a.d2%10; a.d2 /= 10;
+    tmp = a.d1; tmp += (cl_ulong)carry << 32; carry = tmp%10;  a.d1 = (cl_uint) (tmp/10);
+    tmp = a.d0; tmp += (cl_ulong)carry << 32; carry = tmp%10;  a.d0 = (cl_uint) (tmp/10);
+    digit[digits++] = carry;
+  }
+  if(digits == 0)sprintf(buf, "0");
+  else
+  {
+    digits--;
+    while(digits >= 0)
+    {
+      buf[i++] = '0' + digit[digits--];
+    }
+    buf[i] = 0;
+  }
+}
+
+/* unused 
 
 void print_dez144(int144 a, char *buf)
 {
@@ -97,21 +133,6 @@ void print_dez144(int144 a, char *buf)
   tmp.d2 = (a.d3 <<  8) + (a.d2 >> 16);
   tmp.d1 = (a.d2 << 16) + (a.d1 >>  8);
   tmp.d0 = (a.d1 << 24) +  a.d0;
-
-  print_dez192(tmp, buf);
-}
-
-
-void print_dez96(int96 a, char *buf)
-{
-  int192 tmp;
-
-  tmp.d5 = 0;
-  tmp.d4 = 0;
-  tmp.d3 = 0;
-  tmp.d2 = a.d2;
-  tmp.d1 = a.d1;
-  tmp.d0 = a.d0;
 
   print_dez192(tmp, buf);
 }
@@ -143,37 +164,7 @@ void print_dez192(int192 a, char *buf)
     }
   }
 }
-
-
-void print_dez90(int96 a, char *buf)
-/*
-assumes 30 bits per component
-writes "a" into "buf" in decimal
-"buf" must be at least 30 bytes
 */
-{
-  char digit[29];
-  int  digits=0,carry,i=0;
-  long long int tmp;
-
-  while((a.d0!=0 || a.d1!=0 || a.d2!=0) && digits<29)
-  {
-                                                   carry=a.d2%10; a.d2/=10;
-    tmp = a.d1; tmp += (long long int)carry << 30; carry=tmp%10;  a.d1 =(cl_uint) (tmp/10);
-    tmp = a.d0; tmp += (long long int)carry << 30; carry=tmp%10;  a.d0 =(cl_uint) (tmp/10);
-    digit[digits++]=carry;
-  }
-  if(digits==0)sprintf(buf,"0");
-  else
-  {
-    digits--;
-    while(digits >= 0)
-    {
-      sprintf(&(buf[i++]),"%1d",digit[digits--]);
-    }
-  }
-}
-
 
 void print_timestamp(FILE *outfile)
 {
@@ -202,7 +193,7 @@ void print_status_line(mystuff_t *mystuff)
   int time_read = 0;
   double val;
 
-  if(mystuff->mode == MODE_SELFTEST_SHORT) return; /* no output during short selftest */
+  if(mystuff->mode == MODE_SELFTEST_SHORT || mystuff->mode == MODE_PERFTEST) return; /* no output during short selftest */
 
   if (mystuff->more_classes)  max_class_number = 960;
   else                        max_class_number = 96;
@@ -294,11 +285,7 @@ void print_status_line(mystuff_t *mystuff)
       }
       else if(mystuff->stats.progressformat[i+1] == 'w') // CPU wait time
       {
-       #ifdef __MINGW32__
-         index += sprintf(buffer + index, "%6I64u", mystuff->stats.cpu_wait_time / mystuff->stats.grid_count); /* mfakto only */
-       #else
-        index += sprintf(buffer + index, "%6llu", mystuff->stats.cpu_wait_time / mystuff->stats.grid_count); /* mfakto only */
-       #endif
+        index += sprintf(buffer + index, "%6u", (unsigned int) (mystuff->stats.cpu_wait_time / mystuff->stats.grid_count)); /* mfakto only */
       }
       else if(mystuff->stats.progressformat[i+1] == 'W') // CPU wait fraction
       {
@@ -437,7 +424,7 @@ void print_result_line(mystuff_t *mystuff, int factorsfound)
 }
 
 
-void print_factor(mystuff_t *mystuff, int factor_number, char *factor)
+void print_factor(mystuff_t *mystuff, int factor_number, char *factor, double bits)
 {
   char UID[110]; /* 50 (V5UserID) + 50 (ComputerID) + 8 + spare */
   FILE *resultfile = NULL;
@@ -462,7 +449,7 @@ void print_factor(mystuff_t *mystuff, int factor_number, char *factor)
     if(mystuff->mode != MODE_SELFTEST_SHORT)
     {
       if(mystuff->printmode == 1 && factor_number == 0)printf("\n");
-      printf("M%u has a factor: %s\n", mystuff->exponent, factor);
+      printf("M%u has a factor: %s (%f bits, %f GHz-d)\n", mystuff->exponent, factor, bits, mystuff->stats.ghzdays);
     }
     if(mystuff->mode == MODE_NORMAL)
     {
@@ -631,4 +618,49 @@ const char* ClErrorString( const cl_int errcode )
     default:
       return "Unknown errorcode (not an OpenCL error)";
   }
+}
+
+void printArray(const char * Name, const cl_uint * Data, const cl_uint len, cl_uint hex)
+{
+  cl_uint i, o, c, val;
+  char *fmt1, *fmt2, *fmt3, *fmt4;
+
+  if (hex)
+  {
+    fmt1=(char *)"<%u x %#x> ";
+    fmt2=(char *)"%#x ";
+    fmt3=(char *)"... %#x %#x %#x\n";
+    fmt4=(char *)"<%d x 0x0 at the end>\n";
+  }
+  else
+  {
+    fmt1=(char *)"<%u x %u> ";
+    fmt2=(char *)"%u ";
+    fmt3=(char *)"... %u %u %u\n";
+    fmt4=(char *)"<%d x 0 at the end>\n";
+  }
+  o = printf("%s (%d): ", Name, len);
+  for(i = 0; i < len-2 && o < 960;) // no more than 1000 chars
+  {
+    if (Data[i] == Data[i+1] && Data[i] == Data[i+2])
+    {
+      val = Data[i];
+      c = 0;
+      while(Data[i] == val && i < len)
+      {
+        ++c; ++i;
+      }
+      o += printf(fmt1, c, val);
+      continue;
+    }
+    else
+    {
+      o += printf(fmt2, Data[i]);
+    }
+    ++i;
+  }
+  if (i<len) printf(fmt3, Data[len-3], Data[len-2], Data[len-1]); else printf("\n");
+  i=len-1; c=0;
+  while ((Data[i--] == 0) && i>0) c++;
+  if (c > 0) printf(fmt4, c);
 }

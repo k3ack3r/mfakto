@@ -37,6 +37,7 @@ See (http://www.mersenneforum.org/showthread.php?t=11900) for Ben's initial work
 #include "my_types.h"
 #include "compatibility.h"
 #include "mfakto.h"
+#include "output.h"
 
 // valgrind tests complain a lot about the blocks being uninitialized
 #define malloc(x) calloc(x,1)
@@ -52,6 +53,7 @@ const cl_uint block_size = block_size_in_bytes * 8;  // Number of bits generated
 const cl_uint threadsPerBlock = 256;      // Threads per block
 static    int  gpusieve_initialized = 0;
 static cl_uint last_exponent_initialized = 0;
+static cl_uint last_maxp = 0xFFFFFFFF;  // 0 is a bad choice for "uninitialized" as it can happen for small GPUSievePrimes
 
 
 // Global vars.  These could be moved to mystuff, but no other code needs to know about these internal values.
@@ -65,6 +67,9 @@ cl_uint primes_per_thread = 0;    // Number of "rows" in the GPU sieving info ar
 //
 // Sieve initialization done on the CPU
 //
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // Simple CPU sieve of erathosthenes for small limits - not efficient for large limits.
 
@@ -107,15 +112,13 @@ void tiny_soe (cl_uint limit, cl_uint *primes)
     }
   }
 
+  if (i>=sieve_size) fprintf(stderr, "Warning: tiny_soe memory overrun!\n");
+
   free (flags);
 }
 
 // GPU sieve initialization that only needs to be done one time.
 // Running on CPU and copying buffers to the GPU
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 int gpusieve_init (mystuff_t *mystuff, cl_context context)
 {
@@ -620,6 +623,7 @@ void gpusieve_init_class (mystuff_t *mystuff, unsigned long long k_min)
 
 void gpusieve (mystuff_t *mystuff, unsigned long long num_k_remaining)
 {
+  cl_uint maxp = 0xFFFFFFFF; // marker to not copy the param to the GPU
   int  sieve_size;
 
 #ifdef RAW_GPU_BENCH
@@ -633,11 +637,16 @@ void gpusieve (mystuff_t *mystuff, unsigned long long num_k_remaining)
     sieve_size = mystuff->gpu_sieve_size;
   else
     sieve_size = (int) num_k_remaining;
+  if (primes_per_thread != last_maxp)
+  {
+    last_maxp = primes_per_thread;
+    maxp = primes_per_thread;
+  }
 
   // Do some sieving on the GPU!
   // SegSieve<<<(sieve_size + block_size - 1) / block_size, threadsPerBlock>>>((cl_uchar *)mystuff->d_bitarray, (cl_uchar *)mystuff->d_sieve_info, primes_per_thread);
   // cudaThreadSynchronize ();
-  run_cl_sieve((sieve_size + block_size - 1) / block_size, threadsPerBlock, NULL, primes_per_thread);
+  run_cl_sieve((sieve_size + block_size - 1) / block_size, threadsPerBlock, NULL, maxp);
 }
 
 int gpusieve_free (mystuff_t *mystuff)
@@ -646,6 +655,7 @@ int gpusieve_free (mystuff_t *mystuff)
   if (gpusieve_initialized == 0) return 0;
   gpusieve_initialized = 0;
   last_exponent_initialized = 0;
+  last_maxp = 0xFFFFFFFF;
 
   status = clReleaseMemObject(mystuff->d_bitarray); mystuff->d_bitarray=NULL;
   if(status != CL_SUCCESS)

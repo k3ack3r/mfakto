@@ -1,6 +1,7 @@
 /*
 This file is part of mfaktc (mfakto).
-Copyright (C) 2009, 2013  Oliver Weihe (o.weihe@t-online.de)
+Copyright (C) 2014  Oliver Weihe (o.weihe@t-online.de)
+                    Bertram Franz (bertramf@gmx.net)
 
 mfaktc (mfakto) is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,15 +17,12 @@ You should have received a copy of the GNU General Public License
 along with mfaktc (mfakto).  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/* code to handle dynamic changing of settings */
+
+#ifndef menu_H_
+#define menu_H_
+
 #include "my_types.h"
+int handle_kb_input(mystuff_t *mystuff);
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-int read_config(mystuff_t *mystuff);
-int read_array(char * filename, char *name, cl_uint num, cl_uint *arr);
-
-#ifdef __cplusplus
-}
 #endif
