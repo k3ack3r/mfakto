@@ -73,38 +73,38 @@ kernel_info_t       kernel_info[] = {
      {   BARRETT79_MUL32,     "cl_barrett32_79",      64,     79,         1,      NULL},
      {   BARRETT77_MUL32,     "cl_barrett32_77",      64,     77,         1,      NULL},
      {   BARRETT76_MUL32,     "cl_barrett32_76",      64,     76,         1,      NULL},
-     {   BARRETT92_MUL32,     "cl_barrett32_92",      65,     92,         0,      NULL},
-     {   BARRETT88_MUL32,     "cl_barrett32_88",      65,     88,         0,      NULL},
-     {   BARRETT87_MUL32,     "cl_barrett32_87",      65,     87,         0,      NULL},
+     {   BARRETT92_MUL32,     "cl_barrett32_92",      65,     81,         0,      NULL},
+     {   BARRETT88_MUL32,     "cl_barrett32_88",      65,     81,         0,      NULL},
+     {   BARRETT87_MUL32,     "cl_barrett32_87",      65,     81,         0,      NULL},
      {   BARRETT73_MUL15,     "cl_barrett15_73",      60,     73,         0,      NULL},
      {   BARRETT69_MUL15,     "cl_barrett15_69",      60,     69,         0,      NULL},
      {   BARRETT70_MUL15,     "cl_barrett15_70",      60,     69,         0,      NULL},
      {   BARRETT71_MUL15,     "cl_barrett15_71",      60,     70,         0,      NULL},
-     {   BARRETT88_MUL15,     "cl_barrett15_88",      60,     88,         0,      NULL},
-     {   BARRETT83_MUL15,     "cl_barrett15_83",      60,     83,         0,      NULL},
-     {   BARRETT82_MUL15,     "cl_barrett15_82",      60,     82,         0,      NULL},
+     {   BARRETT88_MUL15,     "cl_barrett15_88",      60,     81,         0,      NULL},
+     {   BARRETT83_MUL15,     "cl_barrett15_83",      60,     81,         0,      NULL},
+     {   BARRETT82_MUL15,     "cl_barrett15_82",      60,     81,         0,      NULL},
      {   BARRETT74_MUL15,     "cl_barrett15_74",      60,     74,         0,      NULL},
      {   MG62,                "cl_mg62",              58,     62,         1,      NULL},
      {   MG88,                "cl_mg88",              73,     88,         1,      NULL},
      {   UNKNOWN_KERNEL,      "UNKNOWN kernel",        0,      0,         0,      NULL}, // end of automatic loading
      {   _64BIT_64_OpenCL,    "mfakto_cl_64",          0,     64,         0,      NULL}, // slow shift-cmp-sub kernel: removed
-     {   BARRETT92_64_OpenCL, "cl_barrett32_92",      64,     92,         0,      NULL}, // mapped to 32-bit barrett so far
+     {   BARRETT92_64_OpenCL, "cl_barrett32_92",      64,     81,         0,      NULL}, // mapped to 32-bit barrett so far
      {   CL_CALC_BIT_TO_CLEAR, "CalcBitToClear",       0,      0,         0,      NULL}, // called by gpusieve_init_class
      {   CL_CALC_MOD_INV,     "CalcModularInverses",   0,      0,         0,      NULL}, // called by gpusieve_init_exponent
      {   CL_SIEVE,            "SegSieve",              0,      0,         0,      NULL}, // GPU sieve
      {   BARRETT79_MUL32_GS,  "cl_barrett32_79_gs",   64,     79,         1,      NULL}, // keep the GPU-sieve-based kernels in the same order as their CPU-sieve versions
      {   BARRETT77_MUL32_GS,  "cl_barrett32_77_gs",   64,     77,         1,      NULL},
      {   BARRETT76_MUL32_GS,  "cl_barrett32_76_gs",   64,     76,         1,      NULL},
-     {   BARRETT92_MUL32_GS,  "cl_barrett32_92_gs",   65,     92,         0,      NULL},
-     {   BARRETT88_MUL32_GS,  "cl_barrett32_88_gs",   65,     88,         0,      NULL},
+     {   BARRETT92_MUL32_GS,  "cl_barrett32_92_gs",   65,     81,         0,      NULL},
+     {   BARRETT88_MUL32_GS,  "cl_barrett32_88_gs",   65,     81,         0,      NULL},
      {   BARRETT87_MUL32_GS,  "cl_barrett32_87_gs",   65,     87,         0,      NULL},
      {   BARRETT73_MUL15_GS,  "cl_barrett15_73_gs",   60,     73,         0,      NULL},
      {   BARRETT69_MUL15_GS,  "cl_barrett15_69_gs",   60,     69,         0,      NULL},
      {   BARRETT70_MUL15_GS,  "cl_barrett15_70_gs",   60,     69,         0,      NULL},
      {   BARRETT71_MUL15_GS,  "cl_barrett15_71_gs",   60,     70,         0,      NULL},
-     {   BARRETT88_MUL15_GS,  "cl_barrett15_88_gs",   60,     88,         0,      NULL},
-     {   BARRETT83_MUL15_GS,  "cl_barrett15_83_gs",   60,     83,         0,      NULL},
-     {   BARRETT82_MUL15_GS,  "cl_barrett15_82_gs",   60,     82,         0,      NULL},
+     {   BARRETT88_MUL15_GS,  "cl_barrett15_88_gs",   60,     81,         0,      NULL},
+     {   BARRETT83_MUL15_GS,  "cl_barrett15_83_gs",   60,     81,         0,      NULL},
+     {   BARRETT82_MUL15_GS,  "cl_barrett15_82_gs",   60,     81,         0,      NULL},
      {   BARRETT74_MUL15_GS,  "cl_barrett15_74_gs",   60,     74,         0,      NULL},
      {   UNKNOWN_GS_KERNEL,   "UNKNOWN GS kernel",     0,      0,         0,      NULL}, // delimiter
 };
