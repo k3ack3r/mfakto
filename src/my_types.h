@@ -19,7 +19,11 @@ along with mfaktc (mfakto).  If not, see <http://www.gnu.org/licenses/>.
 #ifndef __MY_TYPES_H
 #define __MY_TYPES_H
 #include "params.h"
-#include "CL/cl.h"
+#if defined(__APPLE__) || defined(__MACOSX)
+  #include "OpenCL/cl.h"
+#else
+  #include "CL/cl.h"
+#endif
 
 /* 60bit (4x 15bit) integer
 D=d0 + d1*(2^15) + d2*(2^30) ... */
@@ -249,21 +253,21 @@ typedef struct _mystuff_t
   cl_uint  bit_min;                         /* where do we start TFing */
   cl_uint  bit_max_assignment;              /* the upper size of factors we're searching for */
   cl_uint  bit_max_stage;                   /* as above, but only for the current stage */
-  
+
   cl_uint  sieve_primes;                    /* the actual number of odd primes using for sieving */
   cl_uint  sieve_primes_adjust;             /* allow automated adjustment of sieve_primes? */
   cl_uint  sieve_primes_upper_limit;        /* the upper limit of sieve_primes for the current exponent */
-  cl_uint  sieve_primes_min, sieve_primes_max; /* user configureable sieve_primes min/max */
+  cl_uint  sieve_primes_min, sieve_primes_max; /* user configurable sieve_primes min/max */
   cl_uint  sieve_size;
 
   cl_uint  gpu_sieving;			             /* TRUE if we're letting the GPU do the sieving */
   cl_uint  gpu_sieve_size;			         /* Size (in bits) of the GPU sieve.  4..128M bits. */
-  cl_uint  gpu_sieve_primes;             /* the actual number of primes using for sieving */
   cl_uint  gpu_sieve_processing_size;	   /* The number of GPU sieve bits each thread in a kernel will process.  8,16,24,32K bits. */
+  cl_uint  gpu_sieve_min_exp;			       /* minimum exponent for the sieve_primes we have */
 
   cl_uint  flush;                        /* GPU sieving only: flush the queue after # kernels, 0=off */
   cl_uint  num_streams;
-  
+
   enum MODES mode;
   cl_uint checkpoints, checkpointdelay, stages, stopafterfactor;
   cl_uint threads_per_grid_max, threads_per_grid;
@@ -271,7 +275,7 @@ typedef struct _mystuff_t
 #ifdef CHECKS_MODBASECASE
   cl_mem   d_modbasecase_debug;
   cl_uint *h_modbasecase_debug;
-#endif  
+#endif
 
   cl_uint  vectorsize;
   cl_uint  printmode;
@@ -293,6 +297,8 @@ typedef struct _mystuff_t
   char ComputerID[51];       /* currently only used for screen/result output */
   char CompileOptions[151];  /* additional compile options */
   char binfile[51];          /* compiled kernels file to use, empty if not desired */
+
+  cl_uint override_v;        /* override INI file when setting verbosity */
 
 }mystuff_t;			/* FIXME: proper name needed */
 
@@ -317,4 +323,3 @@ typedef struct _kernel_info
 #define RET_QUIT  1000000002
 
 #endif
-

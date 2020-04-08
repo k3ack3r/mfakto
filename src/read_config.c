@@ -139,7 +139,7 @@ int read_config(mystuff_t *mystuff)
   char tmp[51];
   unsigned long long int ul;
 
-  if(mystuff->verbosity == -1)
+  if(mystuff->verbosity == -1 || mystuff->override_v == 0)
   {
     if(my_read_int(mystuff->inifile, "Verbosity", &i))
     {
@@ -173,7 +173,7 @@ int read_config(mystuff_t *mystuff)
   }
   mystuff->gpu_sieving = i;
 
-/*****************************************************************************/  
+/*****************************************************************************/
 
   if (mystuff->gpu_sieving == 0)
   {
@@ -195,7 +195,7 @@ int read_config(mystuff_t *mystuff)
     if(mystuff->verbosity >= 1)printf("  SievePrimesMin            %d\n",i);
     mystuff->sieve_primes_min = i;
 
-  /*****************************************************************************/  
+  /*****************************************************************************/
 
     if(my_read_int(mystuff->inifile, "SievePrimesMax", &i))
     {
@@ -233,7 +233,7 @@ int read_config(mystuff_t *mystuff)
     if(mystuff->verbosity >= 1)printf("  SievePrimes               %d\n",i);
     mystuff->sieve_primes = i;
 
-  /*****************************************************************************/  
+  /*****************************************************************************/
 
     if(my_read_int(mystuff->inifile, "SievePrimesAdjust", &i))
     {
@@ -250,7 +250,7 @@ int read_config(mystuff_t *mystuff)
     if (mystuff->sieve_primes_adjust == 0)
       mystuff->sieve_primes_max = mystuff->sieve_primes;  // no chance to use higher primes
 
-  /*****************************************************************************/  
+  /*****************************************************************************/
 #ifdef SIEVE_SIZE_LIMIT
     mystuff->sieve_size = SIEVE_SIZE;
 #else
@@ -355,7 +355,7 @@ int read_config(mystuff_t *mystuff)
     #else
       if(mystuff->verbosity >= 1)printf("  SieveCPUMask              %lld\n", ul);
     #endif
-  
+
     mystuff->cpu_mask = ul;
   /*****************************************************************************/
   /* not used in mfakto (yet)
@@ -423,7 +423,7 @@ int read_config(mystuff_t *mystuff)
       }
     }
     if(mystuff->verbosity >= 1)printf("  GPUSievePrimes            %d\n",i);
-    mystuff->gpu_sieve_primes = i;
+    mystuff->sieve_primes = i;
 
 /*****************************************************************************/
 
@@ -451,7 +451,7 @@ int read_config(mystuff_t *mystuff)
         i = GPU_SIEVE_PROCESS_SIZE_MIN;
       }
     }
-    if(mystuff->verbosity >= 1)printf("  GPUSieveProcessSize       %dKi bits\n",i);
+    if(mystuff->verbosity >= 1)printf("  GPUSieveProcessSize       %d Kib\n",i);
     mystuff->gpu_sieve_processing_size = i * 1024;
 
 /*****************************************************************************/
@@ -482,7 +482,7 @@ int read_config(mystuff_t *mystuff)
         printf("adjusting GPUSieveSize to %dM\n", i);
       }
     }
-    if(mystuff->verbosity >= 1)printf("  GPUSieveSize              %dMi bits\n",i);
+    if(mystuff->verbosity >= 1)printf("  GPUSieveSize              %d Mib\n",i);
     mystuff->gpu_sieve_size = i * 1024 * 1024;
 
     /*****************************************************************************/
@@ -565,12 +565,12 @@ int read_config(mystuff_t *mystuff)
       printf("WARNING: Minimum value for CheckpointDelay is 0s\n");
       i = 0;
     }
-    if(mystuff->verbosity >= 1)printf("  CheckpointDelay           %ds\n", i);
+    if(mystuff->verbosity >= 1)printf("  CheckpointDelay           %d s\n", i);
     mystuff->checkpointdelay = i;
   }
 
 /*****************************************************************************/
-  
+
   if(my_read_int(mystuff->inifile, "Stages", &i))
   {
     printf("WARNING: Cannot read Stages from inifile, enabled by default\n");
@@ -837,4 +837,3 @@ int read_array(char *filename, char *keyname, cl_uint num, cl_uint *arr)
   fclose(in);
   return i;
 }
-

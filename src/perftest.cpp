@@ -22,7 +22,11 @@ along with mfaktc (mfakto).  If not, see <http://www.gnu.org/licenses/>.
 #include <iostream>
 #include <fstream>
 #include "string.h"
-#include "CL/cl.h"
+#if defined(__APPLE__) || defined(__MACOSX)
+  #include "OpenCL/cl.h"
+#else
+  #include "CL/cl.h"
+#endif
 #include "params.h"
 #include "my_types.h"
 #include "compatibility.h"
@@ -90,7 +94,7 @@ int init_perftest(int devicenumber)
 //  i = (cl_uint)deviceinfo.maxThreadsPerBlock * deviceinfo.units * mystuff.vectorsize;
   i = 2048;
   while( (i * 2) <= mystuff.threads_per_grid_max) i = i * 2;
-  mystuff.threads_per_grid = min(i, (cl_uint)deviceinfo.maxThreadsPerGrid);
+  mystuff.threads_per_grid = MIN(i, (cl_uint)deviceinfo.maxThreadsPerGrid);
 
   set_gpu_type();
   load_kernels(&devicenumber);
@@ -309,8 +313,8 @@ Sieved out:   63.63%  65.94%  67.95%  69.73%  71.31%  72.72%  74.00%  75.16%  76
   printf("SievePrimes:");
   for(ii=0; ii<nsp; ii++)
   {
-    sprimes[ii] = min(sprimes[ii], 1000000);
-    sprimes[ii] = max(sprimes[ii], 254);
+    sprimes[ii] = MIN(sprimes[ii], 1000000);
+    sprimes[ii] = MAX(sprimes[ii], 254);
     printf(" %7u", sprimes[ii]);
   }
   printf("\nSieveSizeLimit");
@@ -531,7 +535,7 @@ int test_copy(cl_uint par)
 
 //      printf("     %lld ns (%lld - %lld)\n", endTime-startTime, endTime, startTime);
       time2 += (double)(endTime-startTime);
-      best = min(best, endTime-startTime);
+      best = MIN(best, endTime-startTime);
     }
   }
   printf("\n  Standard copy, profiled queue:\n%8d MB in %6.1f ms (%6.1f MB/s) (real)\n",
@@ -597,6 +601,7 @@ int test_gpu_sieve(cl_uint par)
   double time1;
   cl_uint i;
   cl_ulong k = 9876543210;
+  mystuff.exponent = EXP;
 
   // 50 is a reasonable number that does not usually crash the driver
   //par = 50;
@@ -651,15 +656,15 @@ int test_gpu_sieve(cl_uint par)
   // now also quickly test a GPU kernel ...
 
   cl_uint   shared_mem_required = 100;            // no sieving = 100%
-  if (mystuff.gpu_sieve_primes < 54) shared_mem_required = 100;  // no sieving = 100%
-  else if (mystuff.gpu_sieve_primes < 310) shared_mem_required = 50;  // 54 primes expect 48.30%
-  else if (mystuff.gpu_sieve_primes < 1846) shared_mem_required = 38;  // 310 primes expect 35.50%
-  else if (mystuff.gpu_sieve_primes < 21814) shared_mem_required = 30;  // 1846 primes expect 28.10%
-  else if (mystuff.gpu_sieve_primes < 34101) shared_mem_required = 24;  // 21814 primes expect 21.93%
-  else if (mystuff.gpu_sieve_primes < 63797) shared_mem_required = 23;  // 34101 primes expect 20.94%
-  else if (mystuff.gpu_sieve_primes < 115253) shared_mem_required = 22;    // 63797 primes expect 19.87%
-  else if (mystuff.gpu_sieve_primes < 239157) shared_mem_required = 21;    // 115253 primes expect 18.98%
-  else if (mystuff.gpu_sieve_primes < 550453) shared_mem_required = 20;    // 239257 primes expect 17.99%
+  if (mystuff.sieve_primes < 54) shared_mem_required = 100;  // no sieving = 100%
+  else if (mystuff.sieve_primes < 310) shared_mem_required = 50;  // 54 primes expect 48.30%
+  else if (mystuff.sieve_primes < 1846) shared_mem_required = 38;  // 310 primes expect 35.50%
+  else if (mystuff.sieve_primes < 21814) shared_mem_required = 30;  // 1846 primes expect 28.10%
+  else if (mystuff.sieve_primes < 34101) shared_mem_required = 24;  // 21814 primes expect 21.93%
+  else if (mystuff.sieve_primes < 63797) shared_mem_required = 23;  // 34101 primes expect 20.94%
+  else if (mystuff.sieve_primes < 115253) shared_mem_required = 22;    // 63797 primes expect 19.87%
+  else if (mystuff.sieve_primes < 239157) shared_mem_required = 21;    // 115253 primes expect 18.98%
+  else if (mystuff.sieve_primes < 550453) shared_mem_required = 20;    // 239257 primes expect 17.99%
   else shared_mem_required = 19;          // 550453 primes expect 16.97%
   shared_mem_required = mystuff.gpu_sieve_processing_size * sizeof (short) * shared_mem_required / 100;
 
@@ -734,8 +739,8 @@ int test_gpu_sieve(cl_uint par)
   printf("GPU sieve raw rate (input rate M/s)\nSievePrimes: ");
   for(ii=0; ii<nsp; ii++)
   {
-    sprimes[ii] = min(sprimes[ii], GPU_SIEVE_PRIMES_MAX);
-    sprimes[ii] = max(sprimes[ii], 54);
+    sprimes[ii] = MIN(sprimes[ii], GPU_SIEVE_PRIMES_MAX);
+    sprimes[ii] = MAX(sprimes[ii], 54);
     printf(" %7u", sprimes[ii]);
   }
   printf("\nGPUSieveSize  ");
@@ -750,10 +755,10 @@ int test_gpu_sieve(cl_uint par)
     {
       gpusieve_free(&mystuff);
 
-      mystuff.gpu_sieve_primes=sprimes[ii];
+      mystuff.sieve_primes=sprimes[ii];
       init_CLstreams(1);  // runs gpusieve_init(&mystuff, context);
       gpusieve_init_exponent(&mystuff);
-      sprimes[ii]=mystuff.gpu_sieve_primes;
+      sprimes[ii]=mystuff.sieve_primes;
 
       timer_init(&timer);
       for (i=0; i<(cl_uint)(par*(nsp-ii)); i++, k+= (cl_ulong) mystuff.gpu_sieve_size * mystuff.num_classes)
@@ -874,7 +879,7 @@ void insert_time(double time1, double time2[], cl_uint num, cl_uint kernel_idxs[
   kernel_idxs[i] = num;
 }
 
-int test_cpu_tf_kernels(cl_uint par)
+GPUKernels test_cpu_tf_kernels(cl_uint par)
 {
   static cl_uint num_test=0; // use this counter to cycle through the FC blocks to avoid successive runs blocking each other
   timeval  timer;
@@ -888,6 +893,7 @@ int test_cpu_tf_kernels(cl_uint par)
   cl_uint  shiftcount, ln2b, status;
   cl_ulong num_fcs, b_preinit_lo, b_preinit_mid, b_preinit_hi;
   cl_ulong k = calculate_k(mystuff.exponent,mystuff.bit_min);
+  GPUKernels fastest_kernel = UNKNOWN_KERNEL;
 
   new_class=1; // tell run_kernel to re-submit the one-time kernel arguments
   /* set result array to 0 */
@@ -904,7 +910,7 @@ int test_cpu_tf_kernels(cl_uint par)
   if(status != CL_SUCCESS)
   {
     std::cout<<"Error " << status << " (" << ClErrorString(status) << "): Copying h_RES(clEnqueueWriteBuffer)\n";
-    return RET_ERROR; // # factors found ;-)
+    return UNKNOWN_KERNEL; // # factors found ;-)
   }
   shiftcount=10;  // no exp below 2^10 ;-)
   while((1ULL<<shiftcount) < (unsigned long long int)mystuff.exponent)shiftcount++;
@@ -929,7 +935,7 @@ int test_cpu_tf_kernels(cl_uint par)
   b_preinit_hi=0;b_preinit_mid=0;b_preinit_lo=0;
 // set the pre-initriables in all sizes for all possible kernels
   {
-    if     (ln2b<24 ){fprintf(stderr, "Pre-init (%u) too small\n", ln2b); return RET_ERROR;}      // should not happen
+    if     (ln2b<24 ){fprintf(stderr, "Pre-init (%u) too small\n", ln2b); return UNKNOWN_KERNEL;}      // should not happen
     else if(ln2b<48 )b_preinit.d1=1<<(ln2b-24);   // should not happen
     else if(ln2b<72 )b_preinit.d2=1<<(ln2b-48);
     else if(ln2b<96 )b_preinit.d3=1<<(ln2b-72);
@@ -938,7 +944,7 @@ int test_cpu_tf_kernels(cl_uint par)
   }
 
   { // skip the "lowest" 4 levels, so that uint8 is sufficient for 12 components of int180
-    if     (ln2b<60 ){fprintf(stderr, "Pre-init (%u) too small\n", ln2b); return RET_ERROR;}      // should not happen
+    if     (ln2b<60 ){fprintf(stderr, "Pre-init (%u) too small\n", ln2b); return UNKNOWN_KERNEL;}      // should not happen
     else if(ln2b<75 )b_in.s[0]=1<<(ln2b-60);
     else if(ln2b<90 )b_in.s[1]=1<<(ln2b-75);
     else if(ln2b<105)b_in.s[2]=1<<(ln2b-90);
@@ -1005,7 +1011,7 @@ int test_cpu_tf_kernels(cl_uint par)
   if(status != CL_SUCCESS)
   {
     std::cerr<< "Error " << status << " (" << ClErrorString(status) << "): Starting kernel " << kernel_info[use_kernel].kernelname << ". (run_kernel)\n";
-    return RET_ERROR;
+    return UNKNOWN_KERNEL;
   }
   clFinish(QUEUE);
   time1 = (double)timer_diff(&timer);
@@ -1078,6 +1084,9 @@ int test_cpu_tf_kernels(cl_uint par)
   cl_uint last_kernel = UNKNOWN_KERNEL;
   double last_ghz;
   cl_uint bitlevel;
+  cl_uint bit_min = mystuff.bit_min;
+  cl_uint bit_max_stage = mystuff.bit_max_stage;
+
   for (bitlevel=10; bitlevel<100; ++bitlevel)
   {
     bitlevels[bitlevel] = UNKNOWN_KERNEL;
@@ -1093,6 +1102,8 @@ int test_cpu_tf_kernels(cl_uint par)
         break;
       }
     }
+    if (bitlevel >= bit_min && bitlevel < bit_max_stage)
+      fastest_kernel = (GPUKernels) bitlevels[bitlevel]; // remember the last one that fits the stage
 
     if (bitlevels[bitlevel] != last_kernel)
     {
@@ -1103,10 +1114,12 @@ int test_cpu_tf_kernels(cl_uint par)
         printf("%7u - ", bitlevel);
     }
   }
-  return 0;
+  mystuff.bit_min = bit_min;
+  mystuff.bit_max_stage = bit_max_stage;
+  return fastest_kernel;
 }
 
-int test_gpu_tf_kernels(cl_uint par)
+GPUKernels test_gpu_tf_kernels(cl_uint par)
 {
   struct timeval timer;
   double time1, time2[UNKNOWN_GS_KERNEL-BARRETT79_MUL32_GS], ghzdt, ghz;
@@ -1116,6 +1129,9 @@ int test_gpu_tf_kernels(cl_uint par)
   cl_ulong num_fcs = mystuff.gpu_sieve_size - 1; //start with one full sieve block
   cl_uint use_kernel;
   double ghzd = primenet_ghzdays(mystuff.exponent, mystuff.bit_min, mystuff.bit_min + 1);
+  GPUKernels fastest_kernel;
+  cl_uint bit_min = mystuff.bit_min;
+  cl_uint bit_max_stage = mystuff.bit_max_stage;
 
   mystuff.threads_per_grid = 256;
 
@@ -1181,6 +1197,8 @@ int test_gpu_tf_kernels(cl_uint par)
         break;
       }
     }
+    if (bitlevel >= bit_min && bitlevel <= bit_max_stage)
+      fastest_kernel = (GPUKernels) bitlevels[bitlevel]; // remember the last one that fits the stage
 
     if (bitlevels[bitlevel] != last_kernel)
     {
@@ -1191,7 +1209,9 @@ int test_gpu_tf_kernels(cl_uint par)
         printf("%7u - ", bitlevel);
     }
   }
-  return 0;
+  mystuff.bit_min = bit_min;
+  mystuff.bit_max_stage = bit_max_stage;
+  return fastest_kernel;
 }
 
 int test_tf_kernels(cl_uint par, int devicenumber)
@@ -1223,6 +1243,7 @@ int test_tf_kernels(cl_uint par, int devicenumber)
     printf("ERROR: load_kernels(%d) failed\n", devicenumber);
     return ERR_INIT;
   }
+  mystuff.exponent=EXP;
   if (init_CLstreams(0))
   {
     printf("ERROR: init_CLstreams (malloc buffers?) failed\n");
@@ -1295,7 +1316,7 @@ int test_tf_kernels(cl_uint par, int devicenumber)
       test_cpu_tf_kernels((cl_uint) par);
       if (mystuff.quit) break;
     }
-    printf("\nNote, the calculated GHz-days/day assume sufficiently fast CPU sieve with SievePrimes=%u.\n", mystuff.sieve_primes);  
+    printf("\nNote, the calculated GHz-days/day assume sufficiently fast CPU sieve with SievePrimes=%u.\n", mystuff.sieve_primes);
   }
 
   return 0;
@@ -1307,7 +1328,7 @@ int init_gpu_test(int devicenumber)
 
   // fill some meaningful test values into mystuff
   mystuff.exponent = EXP;
-  mystuff.gpu_sieve_primes = 52765;
+  mystuff.sieve_primes = 52765;
   mystuff.gpu_sieve_processing_size = 24 * 1024;
   mystuff.gpu_sieve_size = 126 * 1024 * 1024;
   mystuff.bit_min = 71;
@@ -1372,6 +1393,59 @@ int perftest(int par, int devicenumber)
   return 0;
 }
 
+GPUKernels test_fastest_kernel()
+{
+  if (mystuff.gpu_sieving == 1)
+  {
+    return test_gpu_tf_kernels(10);
+  }
+  else
+  {
+    cl_uint i;
+    cl_ulong k = calculate_k(mystuff.exponent,mystuff.bit_min);
+    int status;
+
+    sieve_free();
+#ifdef SIEVE_SIZE_LIMIT
+    sieve_init();
+    sieve_init_class(mystuff.exponent, k+=1000000, mystuff.sieve_primes);
+#else
+    cl_uint tmp=3*13*17*19*23;
+    sieve_init(tmp, 1000000);
+    sieve_init_class(mystuff.exponent, k+=1000000, mystuff.sieve_primes);
+#endif
+    mystuff.threads_per_grid = mystuff.threads_per_grid_max;
+    if(mystuff.threads_per_grid > deviceinfo.maxThreadsPerGrid)
+    {
+      mystuff.threads_per_grid = (cl_uint)deviceinfo.maxThreadsPerGrid;
+    }
+    size_t size = mystuff.threads_per_grid * sizeof(int);
+
+    // use one sieved block for the whole test
+    mystuff.threads_per_grid -= mystuff.threads_per_grid % (mystuff.vectorsize * deviceinfo.maxThreadsPerBlock);
+    mystuff.sieve_primes_upper_limit = mystuff.sieve_primes_max;
+    for (i=0; i<mystuff.num_streams; i++)
+    {
+      sieve_candidates(mystuff.threads_per_grid, mystuff.h_ktab[i], mystuff.sieve_primes); // use all blocks alternatingly, but always with the same content
+      status = clEnqueueWriteBuffer(QUEUE,
+                mystuff.d_ktab[i],
+                CL_FALSE,  // don't wait here, test_cpu_tf_kernels copies RES in wait mode
+                0,
+                size,
+                mystuff.h_ktab[i],
+                0,
+                NULL,
+                &mystuff.copy_events[i]);
+
+      if(status != CL_SUCCESS)
+      {
+          std::cout<<"Error " << status << " (" << ClErrorString(status) << "): Copying h_ktab[" << i << "] (clEnqueueWriteBuffer)\n";
+      }
+    }
+    return test_cpu_tf_kernels(10);
+  }
+  return UNKNOWN_KERNEL;
+}
 
 /* copy of the init and test functions for troubleshooting and playing around */
 
@@ -1664,7 +1738,7 @@ void CL_test(cl_int devnumber)
   }
   else
   {
-    std::cerr << "\nKernel file \""KERNEL_FILE"\" not found, it needs to be in the same directory as the executable.\n";
+    std::cerr << "\nKernel file \"" KERNEL_FILE "\" not found, it needs to be in the same directory as the executable.\n";
   }
 
   program = clCreateProgramWithSource(context, 1, (const char **)&source, &size, &status);
@@ -1764,7 +1838,7 @@ if (mystuff.more_classes == 1)  strcat(program_options, " -DMORE_CLASSES");
       printf("ERROR: malloc(h_ktab[%d]) failed\n", i);
     }
     mystuff.d_ktab[i] = clCreateBuffer(context,
-                      CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
+                      CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                       mystuff.threads_per_grid * sizeof(cl_uint),
                       mystuff.h_ktab[i],
                       &status);
@@ -1778,7 +1852,7 @@ if (mystuff.more_classes == 1)  strcat(program_options, " -DMORE_CLASSES");
     printf("ERROR: malloc(h_RES) failed\n");
   }
   mystuff.d_RES = clCreateBuffer(context,
-                    CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
+                    CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
                     32 * sizeof(cl_uint),
                     mystuff.h_RES,
                     &status);
@@ -1790,8 +1864,8 @@ if (mystuff.more_classes == 1)  strcat(program_options, " -DMORE_CLASSES");
 
   // Now, quickly test one kernel ...
   // (10 * 2^64+25) mod 3 * 2^23
-  long long unsigned int hi=10;
-  long long unsigned int lo=25;
+  long long unsigned int hi=(1U<<31)-1;
+  long long unsigned int lo=(1<<30)-1;
   long long unsigned int q=3<<23;
   cl_float qr=0.9998f/(cl_float)q;
 
@@ -1990,4 +2064,3 @@ if (mystuff.more_classes == 1)  strcat(program_options, " -DMORE_CLASSES");
 #ifdef __cplusplus
 }
 #endif
-

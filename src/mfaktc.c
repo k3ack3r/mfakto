@@ -142,7 +142,7 @@ k_min *MUST* be aligned in that way that k_min is in class 0!
 
 typedef GPUKernels kernel_precedence[UNKNOWN_KERNEL];
 
-GPUKernels find_fastest_kernel(mystuff_t *mystuff)
+GPUKernels find_fastest_kernel(mystuff_t *mystuff, cl_uint do_test)
 {
   /* searches the kernel precedence list of the GPU for the first one that is capable of running the assignment */
   static kernel_precedence kernel_precedences [] = {
@@ -401,22 +401,34 @@ GPUKernels find_fastest_kernel(mystuff_t *mystuff)
   };
 
   kernel_precedence *k = &kernel_precedences[mystuff->gpu_type]; // select the row for the GPU we're running on / we're configured for
-  GPUKernels         use_kernel = AUTOSELECT_KERNEL;
+  GPUKernels         use_kernel = AUTOSELECT_KERNEL, test_use_kernel;
   cl_uint            i;
   cl_uint            gpusieve_offset = 0;
 
-  if (mystuff->gpu_sieving == 1)
+  if (do_test)
   {
-    gpusieve_offset = BARRETT79_MUL32_GS - BARRETT79_MUL32;
+    test_use_kernel = test_fastest_kernel();
   }
-
-  for (i = 0; i < UNKNOWN_KERNEL && (*k)[i] < UNKNOWN_KERNEL; i++)
+ // else
   {
-    if (kernel_possible((*k)[i], mystuff)) // if needed, this also checks that we have a _gs kernel
+    if (mystuff->gpu_sieving == 1)
     {
-      use_kernel = (GPUKernels)(gpusieve_offset + (*k)[i]);
-      break;
+      gpusieve_offset = BARRETT79_MUL32_GS - BARRETT79_MUL32;
     }
+
+    for (i = 0; i < UNKNOWN_KERNEL && (*k)[i] < UNKNOWN_KERNEL; i++)
+    {
+      if (kernel_possible((*k)[i], mystuff)) // if needed, this also checks that we have a _gs kernel
+      {
+        use_kernel = (GPUKernels)(gpusieve_offset + (*k)[i]);
+        break;
+      }
+    }
+  }
+  if (do_test && use_kernel != test_use_kernel)
+  {
+    printf("Fastest kernel: Overriding predefined:  %s with tested: %s\n", kernel_info[use_kernel].kernelname, kernel_info[test_use_kernel].kernelname);
+    if (test_use_kernel != UNKNOWN_KERNEL) use_kernel = test_use_kernel;
   }
   return use_kernel;
 }
@@ -503,9 +515,9 @@ other return value
 
   if(use_kernel == AUTOSELECT_KERNEL)
   {
-    use_kernel = find_fastest_kernel(mystuff);
+    use_kernel = find_fastest_kernel(mystuff, 0);
 
-    if(use_kernel == AUTOSELECT_KERNEL)
+    if(use_kernel == AUTOSELECT_KERNEL || use_kernel == UNKNOWN_KERNEL)
     {
       printf("ERROR: No suitable kernel found for bit_min=%d, bit_max=%d.\n",
                  mystuff->bit_min, mystuff->bit_max_stage);
@@ -557,7 +569,7 @@ other return value
       mystuff->stats.class_number = cur_class;
       if(mystuff->quit)
       {
-/* check if quit is requested. Because this is at the begining of the class
+/* check if quit is requested. Because this is at the beginning of the class
    we can be sure that if RET_QUIT is returned the last class hasn't
    finished. The signal handler which sets mystuff->quit not active during
    selftests so we need to check for RET_QUIT only when doing real work. */
@@ -734,7 +746,7 @@ k_max and k_min are used as 64bit temporary integers here...
     if(time_run > 86400000ULL)printf("%" PRIu64 "d ",   time_run / 86400000ULL);
     if(time_run > 3600000ULL) printf("%2" PRIu64 "h ", (time_run /  3600000ULL) % 24ULL);
     if(time_run > 60000ULL)   printf("%2" PRIu64 "m ", (time_run /    60000ULL) % 60ULL);
-                              printf("%2" PRIu64 ".%03" PRIu64 "s", (time_run / 1000ULL) % 60ULL, time_run % 1000ULL);
+    printf("%2" PRIu64 ".%03" PRIu64 "s", (time_run / 1000ULL) % 60ULL, time_run % 1000ULL);
     if(restart != 0)
     {
       time_est = (time_run * mystuff->stats.class_counter ) / (cl_ulong)(mystuff->stats.class_counter-restart);
@@ -742,7 +754,7 @@ k_max and k_min are used as 64bit temporary integers here...
       if(time_est > 86400000ULL)printf("%" PRIu64 "d ",   time_est / 86400000ULL);
       if(time_est > 3600000ULL) printf("%2" PRIu64 "h ", (time_est /  3600000ULL) % 24ULL);
       if(time_est > 60000ULL)   printf("%2" PRIu64 "m ", (time_est /    60000ULL) % 60ULL);
-                                printf("%2" PRIu64 ".%03" PRIu64 "s", (time_est / 1000ULL) % 60ULL, time_est % 1000ULL);
+      printf("%2" PRIu64 ".%03" PRIu64 "s", (time_est / 1000ULL) % 60ULL, time_est % 1000ULL);
     }
     if(mystuff->mode == MODE_NORMAL) printf(" (%.2f GHz-days / day)", mystuff->stats.ghzdays * 86400000.0 / (double) time_est);
     printf("\n\n");
@@ -772,14 +784,16 @@ RET_ERROR we might have a serios problem
   unsigned int retval=1, i, ind;
   enum GPUKernels kernels[UNKNOWN_KERNEL], kernel_index;
   // this index is 1 less than what -st/-st2 report
-  unsigned int index[] = {  1, 12, 33, 50, 72, 73, 82, 88, 99,  // ~ one from each bitlevel
+  unsigned int index[] = {  1547, 12, 33, 50, 72, 73, 82, 88, 99,  // ~ one from each bitlevel
                             106, 117, 129, 140, 154, 158, 164,
                             175, 177, 183, 190, 194, 198, 199,
                             204, 207, 210, 355,  358,  666,   // some very small factors
-                           1547    // some factors below 2^95 (test 95 bit kernel)
+                           1
                          };
   // save the SievePrimes ini value as the selftest may lower it to fit small test-exponents
   unsigned int sieve_primes_save = mystuff->sieve_primes;
+  unsigned int verbosity_save = mystuff->verbosity;
+  mystuff->verbosity = 0;
 
   register_signal_handler(mystuff);
 
@@ -807,7 +821,22 @@ RET_ERROR we might have a serios problem
     mystuff->bit_min            = st_data[ind].bit_min;
     mystuff->bit_max_assignment = st_data[ind].bit_min + 1;
     mystuff->bit_max_stage      = mystuff->bit_max_assignment;
-
+    if (mystuff->gpu_sieving == 0)
+    {
+      // careful to not sieve out small test candidates
+      mystuff->sieve_primes_upper_limit = sieve_sieve_primes_max(mystuff->exponent, mystuff->sieve_primes_max);
+      if (mystuff->sieve_primes > mystuff->sieve_primes_upper_limit)
+        mystuff->sieve_primes = mystuff->sieve_primes_upper_limit;
+    }
+    else
+    {
+      if (mystuff->exponent < mystuff->gpu_sieve_min_exp ||  sieve_primes_save != mystuff->sieve_primes)
+      {
+        mystuff->sieve_primes = sieve_primes_save;
+        gpusieve_free(mystuff);
+        init_CLstreams(1);
+      }
+    }
 /* create a list which kernels can handle this testcase */
     j = 0;
 
@@ -823,10 +852,6 @@ RET_ERROR we might have a serios problem
         {
           if(kernel_possible(kernel_index, mystuff)) kernels[j++] = kernel_index;
         }
-        // careful to not sieve out small test candidates
-        mystuff->sieve_primes_upper_limit = sieve_sieve_primes_max(mystuff->exponent, mystuff->sieve_primes_max);
-        if (mystuff->sieve_primes > mystuff->sieve_primes_upper_limit)
-          mystuff->sieve_primes = mystuff->sieve_primes_upper_limit;
       }
       else
       {
@@ -841,7 +866,7 @@ RET_ERROR we might have a serios problem
     }
     else
     {
-      if ((kernels[0]=find_fastest_kernel(mystuff)) != AUTOSELECT_KERNEL) j=1;
+      if ((kernels[0]=find_fastest_kernel(mystuff, 0)) != AUTOSELECT_KERNEL) j=1;
     }
 
     while(j>0)
@@ -881,7 +906,7 @@ RET_ERROR we might have a serios problem
   {
     printf("selftest FAILED!\n\n");
   }
-
+  mystuff->verbosity = verbosity_save;
   return retval;
 }
 
@@ -898,14 +923,16 @@ int main(int argc, char **argv)
 
   mystuff.mode = MODE_NORMAL;
   mystuff.quit = 0;
-  mystuff.verbosity = -1;
+  mystuff.verbosity = 1;
+  mystuff.override_v = 0;
   mystuff.bit_min = -1;
   mystuff.bit_max_assignment = -1;
   mystuff.bit_max_stage = -1;
   mystuff.gpu_sieving = 0;
-  mystuff.gpu_sieve_size = GPU_SIEVE_SIZE_DEFAULT * 1024 * 1024;		/* Size (in bits) of the GPU sieve.  Default is 64M bits. */
-  mystuff.gpu_sieve_primes = GPU_SIEVE_PRIMES_DEFAULT;				/* Default to sieving primes below about 1.05M */
-  mystuff.gpu_sieve_processing_size = GPU_SIEVE_PROCESS_SIZE_DEFAULT * 1024;	/* Default to 16K bits processed by each block in a Barrett kernel. */
+  /* GPU sieve size in bits. Default is 64 Mib. */
+  mystuff.gpu_sieve_size = GPU_SIEVE_SIZE_DEFAULT * 1024 * 1024;
+  /* Default to 16 Kib processed by each block in a Barrett kernel. */
+  mystuff.gpu_sieve_processing_size = GPU_SIEVE_PROCESS_SIZE_DEFAULT * 1024;
   strcpy(mystuff.inifile, "mfakto.ini");
   mystuff.force_rebuild = 0;
 
@@ -935,11 +962,12 @@ int main(int argc, char **argv)
 
       if(tmp < 0)
       {
-        printf("WARNING: minumum verbosity level is 0\n");
+        printf("WARNING: minimum verbosity level is 0\n");
         tmp = 0;
       }
 
       mystuff.verbosity = tmp;
+      mystuff.override_v = 1;
     }
     else if(!strcmp((char*)"-d", argv[i]))
     {
@@ -990,10 +1018,6 @@ int main(int argc, char **argv)
       if(*ptr || errno || (long)bit_max != strtol(argv[i+3],&ptr,10) )
       {
         printf("ERROR: can't parse parameter <max> for option \"-tf\"\n");
-        return ERR_PARAM;
-      }
-      if(!valid_assignment(exponent, bit_min, bit_max, mystuff.verbosity))
-      {
         return ERR_PARAM;
       }
       use_worktodo = 0;
@@ -1060,6 +1084,15 @@ int main(int argc, char **argv)
       return ERR_PARAM;
     }
     i++;
+  }
+
+  /* hack to allow setting the verbosity level */
+  if (!use_worktodo)
+  {
+    if(!valid_assignment(exponent, bit_min, bit_max, mystuff.verbosity))
+    {
+      return ERR_PARAM;
+    }
   }
 
   read_config(&mystuff);
@@ -1159,11 +1192,14 @@ int main(int argc, char **argv)
     // no need to do this if we're sieving on the GPU
     if (mystuff.cpu_mask)
     {
-#if defined _MSC_VER || __MINGW32__ || __CYGWIN__ // might be best just doing as _WIN32
-      SetThreadAffinityMask(GetCurrentThread(), mystuff.cpu_mask);
-#else
-
-      sched_setaffinity(0, sizeof(mystuff.cpu_mask), (cpu_set_t *)&(mystuff.cpu_mask));
+// macOS does not support setting CPU affinity
+#if !defined __APPLE__
+  // might be best just doing as _WIN32
+  #if defined _MSC_VER || __MINGW32__ || __CYGWIN__
+        SetThreadAffinityMask(GetCurrentThread(), mystuff.cpu_mask);
+  #else
+        sched_setaffinity(0, sizeof(mystuff.cpu_mask), (cpu_set_t *)&(mystuff.cpu_mask));
+  #endif
 #endif
     }
 #ifdef SIEVE_SIZE_LIMIT
@@ -1211,6 +1247,17 @@ int main(int argc, char **argv)
             printf("WARNING: SievePrimes is too big for the current assignment, lowering to %u\n", mystuff.sieve_primes_upper_limit);
             printf("         It is not allowed to sieve primes which are equal or bigger than the \n");
             printf("         exponent itself!\n");
+          }
+        }
+        else
+        {
+          if (mystuff.exponent < mystuff.gpu_sieve_min_exp)
+          {
+            printf("WARNING: SievePrimes is too big for the current assignment, adjusting\n");
+            printf("         It is not allowed to sieve primes which are equal or bigger than the \n");
+            printf("         exponent itself.\n");
+            gpusieve_free(&mystuff);
+            init_CLstreams(1);
           }
         }
         if(mystuff.stages == 1)

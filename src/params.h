@@ -41,7 +41,7 @@ than an equal SIEVE_SIZE_LIMIT #define.
 #define SIEVE_SIZE_LIMIT 36
 
 
-/* EXTENDED_SELFTEST will add about 30k additional tests to the -st2 test */
+/* EXTENDED_SELFTEST will add about 30k additional tests to the -st and -st2 tests */
 #define EXTENDED_SELFTEST
 
 
@@ -102,11 +102,11 @@ than an equal SIEVE_SIZE_LIMIT #define.
 ******************************************************************************/
 
 #ifdef _MSC_VER
-  #define MFAKTO_VERSION "mfakto 0.15pre5-Win" /* DO NOT CHANGE! */
+  #define MFAKTO_VERSION "mfakto 0.15pre6-Win" /* DO NOT CHANGE! */
 #elif defined __MINGW32__
-  #define MFAKTO_VERSION "mfakto 0.15pre5-MGW" /* DO NOT CHANGE! */
+  #define MFAKTO_VERSION "mfakto 0.15pre6-MGW" /* DO NOT CHANGE! */
 #else
-  #define MFAKTO_VERSION "mfakto 0.15pre5" /* DO NOT CHANGE! */
+  #define MFAKTO_VERSION "mfakto 0.15pre6" /* DO NOT CHANGE! */
 #endif
 
 
@@ -114,7 +114,7 @@ than an equal SIEVE_SIZE_LIMIT #define.
 /*
 If MORE_CLASSES is defined then the TF process is split into 4620
 (4 * 3*5*7*11) classes. Otherwise it will be split into 420 (4 * 3*5*7)
-classes. With 4620 the siever runs a bit more efficent at the cost of 10 times
+classes. With 4620 the siever runs a bit more efficient at the cost of 10 times
 more sieve initializations. This will allow to increase SIEVE_PRIMES a little
 bit further. This starts to become useful on my system for e.g. TF M66xxxxxx
 from 2^66 to 2^67. The OpenCL version, mfakto, requires MORE_CLASSES be defined.

@@ -73,37 +73,37 @@ kernel_info_t       kernel_info[] = {
      {   BARRETT79_MUL32,     "cl_barrett32_79",      64,     79,         1,      NULL},
      {   BARRETT77_MUL32,     "cl_barrett32_77",      64,     77,         1,      NULL},
      {   BARRETT76_MUL32,     "cl_barrett32_76",      64,     76,         1,      NULL},
-     {   BARRETT92_MUL32,     "cl_barrett32_92",      65,     81,         0,      NULL},
-     {   BARRETT88_MUL32,     "cl_barrett32_88",      65,     81,         0,      NULL},
-     {   BARRETT87_MUL32,     "cl_barrett32_87",      65,     81,         0,      NULL},
+     {   BARRETT92_MUL32,     "cl_barrett32_92",      65,     92,         0,      NULL},
+     {   BARRETT88_MUL32,     "cl_barrett32_88",      65,     88,         0,      NULL},
+     {   BARRETT87_MUL32,     "cl_barrett32_87",      65,     87,         0,      NULL},
      {   BARRETT73_MUL15,     "cl_barrett15_73",      60,     73,         0,      NULL},
      {   BARRETT69_MUL15,     "cl_barrett15_69",      60,     69,         0,      NULL},
      {   BARRETT70_MUL15,     "cl_barrett15_70",      60,     69,         0,      NULL},
      {   BARRETT71_MUL15,     "cl_barrett15_71",      60,     70,         0,      NULL},
-     {   BARRETT88_MUL15,     "cl_barrett15_88",      60,     81,         0,      NULL},
-     {   BARRETT83_MUL15,     "cl_barrett15_83",      60,     81,         0,      NULL},
+     {   BARRETT88_MUL15,     "cl_barrett15_88",      60,     87,         0,      NULL},
+     {   BARRETT83_MUL15,     "cl_barrett15_83",      60,     82,         0,      NULL},
      {   BARRETT82_MUL15,     "cl_barrett15_82",      60,     81,         0,      NULL},
      {   BARRETT74_MUL15,     "cl_barrett15_74",      60,     74,         0,      NULL},
      {   MG62,                "cl_mg62",              58,     62,         1,      NULL},
      {   MG88,                "cl_mg88",              73,     88,         1,      NULL},
      {   UNKNOWN_KERNEL,      "UNKNOWN kernel",        0,      0,         0,      NULL}, // end of automatic loading
      {   _64BIT_64_OpenCL,    "mfakto_cl_64",          0,     64,         0,      NULL}, // slow shift-cmp-sub kernel: removed
-     {   BARRETT92_64_OpenCL, "cl_barrett32_92",      64,     81,         0,      NULL}, // mapped to 32-bit barrett so far
+     {   BARRETT92_64_OpenCL, "cl_barrett32_92",      64,     92,         0,      NULL}, // mapped to 32-bit barrett so far
      {   CL_CALC_BIT_TO_CLEAR, "CalcBitToClear",       0,      0,         0,      NULL}, // called by gpusieve_init_class
      {   CL_CALC_MOD_INV,     "CalcModularInverses",   0,      0,         0,      NULL}, // called by gpusieve_init_exponent
      {   CL_SIEVE,            "SegSieve",              0,      0,         0,      NULL}, // GPU sieve
      {   BARRETT79_MUL32_GS,  "cl_barrett32_79_gs",   64,     79,         1,      NULL}, // keep the GPU-sieve-based kernels in the same order as their CPU-sieve versions
      {   BARRETT77_MUL32_GS,  "cl_barrett32_77_gs",   64,     77,         1,      NULL},
      {   BARRETT76_MUL32_GS,  "cl_barrett32_76_gs",   64,     76,         1,      NULL},
-     {   BARRETT92_MUL32_GS,  "cl_barrett32_92_gs",   65,     81,         0,      NULL},
-     {   BARRETT88_MUL32_GS,  "cl_barrett32_88_gs",   65,     81,         0,      NULL},
+     {   BARRETT92_MUL32_GS,  "cl_barrett32_92_gs",   65,     92,         0,      NULL},
+     {   BARRETT88_MUL32_GS,  "cl_barrett32_88_gs",   65,     88,         0,      NULL},
      {   BARRETT87_MUL32_GS,  "cl_barrett32_87_gs",   65,     87,         0,      NULL},
      {   BARRETT73_MUL15_GS,  "cl_barrett15_73_gs",   60,     73,         0,      NULL},
      {   BARRETT69_MUL15_GS,  "cl_barrett15_69_gs",   60,     69,         0,      NULL},
      {   BARRETT70_MUL15_GS,  "cl_barrett15_70_gs",   60,     69,         0,      NULL},
      {   BARRETT71_MUL15_GS,  "cl_barrett15_71_gs",   60,     70,         0,      NULL},
-     {   BARRETT88_MUL15_GS,  "cl_barrett15_88_gs",   60,     81,         0,      NULL},
-     {   BARRETT83_MUL15_GS,  "cl_barrett15_83_gs",   60,     81,         0,      NULL},
+     {   BARRETT88_MUL15_GS,  "cl_barrett15_88_gs",   60,     87,         0,      NULL},
+     {   BARRETT83_MUL15_GS,  "cl_barrett15_83_gs",   60,     82,         0,      NULL},
      {   BARRETT82_MUL15_GS,  "cl_barrett15_82_gs",   60,     81,         0,      NULL},
      {   BARRETT74_MUL15_GS,  "cl_barrett15_74_gs",   60,     74,         0,      NULL},
      {   UNKNOWN_GS_KERNEL,   "UNKNOWN GS kernel",     0,      0,         0,      NULL}, // delimiter
@@ -132,7 +132,7 @@ int init_CLstreams(int gs_reinit_only)
         return 1;
       }
       mystuff.d_ktab[i] = clCreateBuffer(context,
-                        CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
+                        CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                         mystuff.threads_per_grid * sizeof(cl_uint),
                         mystuff.h_ktab[i],
                         &status);
@@ -148,7 +148,7 @@ int init_CLstreams(int gs_reinit_only)
       return 1;
     }
     mystuff.d_RES = clCreateBuffer(context,
-                      CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
+                      CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
                       32 * sizeof(cl_uint),
                       mystuff.h_RES,
                       &status);
@@ -164,7 +164,7 @@ int init_CLstreams(int gs_reinit_only)
       return 1;
     }
     mystuff.d_modbasecase_debug = clCreateBuffer(context,
-                      CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
+                      CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
                       32 * sizeof(cl_uint),
                       mystuff.h_modbasecase_debug,
                       &status);
@@ -597,7 +597,11 @@ void set_gpu_type()
         strstr(deviceinfo.d_name, "Neptune")    ||    // 8970M, 8990M
         strstr(deviceinfo.d_name, "Curacao")    ||    // R9 265, R9 270, R9 270X
         strstr(deviceinfo.d_name, "Tonga")      ||    // R9 285
-        strstr(deviceinfo.d_name, "Kalindi")          // GCN APU, Kabini, R7 ???
+        strstr(deviceinfo.d_name, "Hainan")     ||    // R9 285
+        strstr(deviceinfo.d_name, "Kalindi")    ||    // GCN APU, Kabini, R7 ???
+        strstr(deviceinfo.d_name, "D300")       ||    // FirePro D-series
+        strstr(deviceinfo.d_name, "D500")       ||
+        strstr(deviceinfo.d_name, "D700")
         )
     {
       mystuff.gpu_type = GPU_GCN;
@@ -681,7 +685,7 @@ void set_gpu_type()
   {
     printf("WARNING: VectorSize=1 is known to fail on AMD GPUs and drivers. "
            "If the selftest fails, please increase VectorSize to 2 at least. "
-           "See http://devgurus.amd.com/thread/167571 for latest news about this issue.");
+           "See http://community.amd.com/thread/167571 for latest news about this issue.");
   }
 
   if (((mystuff.gpu_type >= GPU_GCN) && (mystuff.gpu_type <= GPU_GCN3)) && (mystuff.vectorsize > 3))
@@ -699,7 +703,7 @@ void set_gpu_type()
     printf("  maximum threads per block %d\n", (int)deviceinfo.maxThreadsPerBlock);
     printf("  maximum threads per grid  %d\n", (int)deviceinfo.maxThreadsPerGrid);
     printf("  number of multiprocessors %d (%d compute elements)\n", deviceinfo.units, deviceinfo.units * gpu_types[mystuff.gpu_type].CE_per_multiprocessor);
-    printf("  clock rate                %dMHz\n", deviceinfo.max_clock);
+    printf("  clock rate                %d MHz\n", deviceinfo.max_clock);
 
     printf("\nAutomatic parameters\n");
 
@@ -707,7 +711,7 @@ void set_gpu_type()
     printf("  optimizing kernels for    %s\n\n", gpu_types[mystuff.gpu_type].gpu_name);
   }
 }
-  
+
 /*
  * load_kernels
  * compile cl files or load the precompiled binary, and load all kernels
@@ -734,7 +738,9 @@ int load_kernels(cl_int *devnumber)
     strcat(program_options, " -g");
   #else
     if ((mystuff.gpu_type != GPU_NVIDIA) && (mystuff.gpu_type != GPU_INTEL)) // NV & INTEL do not know optimisation flags
-      strcat(program_options, " -O3");
+      #if !defined __APPLE__
+        strcat(program_options, " -O3");
+      #endif
   #endif
 
     if (mystuff.more_classes == 1)  strcat(program_options, " -DMORE_CLASSES");
@@ -851,7 +857,7 @@ int load_kernels(cl_int *devnumber)
     }
     else
     {
-      std::cerr << "\nKernel file \""KERNEL_FILE"\" not found, it needs to be in the same directory as the executable.\n";
+      std::cerr << "\nKernel file \"" KERNEL_FILE "\" not found, it needs to be in the same directory as the executable.\n";
       return 1;
     }
 
@@ -985,10 +991,12 @@ int load_kernels(cl_int *devnumber)
       std::cerr << "Failed to allocate host memory.(binaries, " << (sizeof(char *) * numDevices) << " bytes)\n";
       break;
     }
+    int active_device = 0;
     for(i = 0; i < numDevices; i++)
     {
       if(binarySizes[i] != 0)
       {
+        active_device = i;
         binaries[i] = (char *)malloc( sizeof(char) * binarySizes[i]);
         if(!binaries[i])
         {
@@ -1015,14 +1023,15 @@ int load_kernels(cl_int *devnumber)
     /* dump out each binary into its own separate file. */
     if (1 < numDevices)
     {
-      std::cout << "Warning: Dumping only the first of " << numDevices <<
-        " binary formats - if loading the binary file " << mystuff.binfile <<  " fails, delete it and specify the -d <n> option for mfakto.\n";
+        std::cout << "Info: Dumping only 1 of " << numDevices << " binary formats.\n";
+        std::cout << "      If the kernel file " << mystuff.binfile <<  " fails to load, delete it and\n";
+        std::cout << "      restart mfakto with the -d <n> option.\n";
     }
-    if(binarySizes[0] != 0)
+    if(binarySizes[active_device] != 0)
     {
         char deviceName[1024];
         status = clGetDeviceInfo(
-                     devices[0],
+                     devices[active_device],
                      CL_DEVICE_NAME,
                      sizeof(deviceName),
                      deviceName,
@@ -1039,21 +1048,19 @@ int load_kernels(cl_int *devnumber)
           char header[180];
           sprintf(header, "Compile options: %s\n", program_options);
           f.write(header, strlen(header));
-          f.write(binaries[0], binarySizes[0]);
+          f.write(binaries[active_device], binarySizes[active_device]);
           f.close();
           if (mystuff.verbosity > 1) printf("Wrote binary kernel for \"%s\" to \"%s\".\n", deviceName, mystuff.binfile);
         }
         else
         {
-          std::cerr << "Failed to open binary file " << mystuff.binfile << "to save kernel.\n";
+          std::cerr << "Failed to open binary file " << mystuff.binfile << " to save kernel.\n";
         }
     }
     else
     {
-        printf(
-            "binary kernel(%s) : %s\n",
-            mystuff.binfile,
-            "Skipping as there is no binary data to write.\n");
+        printf("Did not create binary kernel: %s\n", mystuff.binfile);
+        printf("Skipping as there is no binary data to write.\n");
         remove(mystuff.binfile);
     }
     break;
@@ -1289,7 +1296,7 @@ cl_int run_calc_mod_inv(cl_uint numblocks, size_t localThreads, cl_event *run_ev
 
 #ifdef DETAILED_INFO
   // get mystuff.d_calc_bit_to_clear_info and print it
-  cl_uint rowinfo_size = MAX_PRIMES_PER_THREAD*4 * sizeof (cl_uint) + mystuff.gpu_sieve_primes * 8;
+  cl_uint rowinfo_size = MAX_PRIMES_PER_THREAD*4 * sizeof (cl_uint) + mystuff.sieve_primes * 8;
 
   status = clEnqueueReadBuffer(QUEUE,     // only for tracing/verification - not needed later.
                 mystuff.d_calc_bit_to_clear_info,
@@ -1406,7 +1413,7 @@ cl_int run_calc_bit_to_clear(cl_uint numblocks, size_t localThreads, cl_event *r
 
 #ifdef DETAILED_INFO
     // get mystuff.d_calc_bit_to_clear_info and d_sieve_info and print it
-  cl_uint info_size = MAX_PRIMES_PER_THREAD*4 * sizeof (cl_uint) + mystuff.gpu_sieve_primes * 8;
+  cl_uint info_size = MAX_PRIMES_PER_THREAD*4 * sizeof (cl_uint) + mystuff.sieve_primes * 8;
   status = clEnqueueReadBuffer(QUEUE,     // only for tracing/verification - not needed later.
                 mystuff.d_calc_bit_to_clear_info,
                 CL_TRUE,
@@ -1785,7 +1792,7 @@ __kernel void barrett15_73(__private uint exp, const int75_t k_base, const __glo
 #endif
 
   }
-  // now the params that change everytime
+  // now the params that change every time
   status = clSetKernelArg(l_kernel,
                     1,
                     sizeof(int75),
@@ -1885,7 +1892,7 @@ int run_kernel24(cl_kernel l_kernel, cl_uint exp, int72 k_base, int stream, int1
 #endif
 
   }
-  // now the params that change everytime
+  // now the params that change every time
   status = clSetKernelArg(l_kernel,
                     1,
                     sizeof(int72),
@@ -1937,7 +1944,7 @@ int run_kernel64(cl_kernel l_kernel, cl_uint exp, cl_ulong k_base, int stream, c
         (long long unsigned int)b_preinit.s[2], (long long unsigned int)b_preinit.s[1], (long long unsigned int)b_preinit.s[0], (unsigned int)b_preinit.s[3]);
 #endif
   }
-  // now the params that change everytime
+  // now the params that change every time
   status = clSetKernelArg(l_kernel,
                     1,
                     sizeof(cl_ulong),
@@ -2018,7 +2025,7 @@ int run_barrett_kernel32(cl_kernel l_kernel, cl_uint exp, int96 k_base, int stre
         b_preinit.d3, b_preinit.d2, b_preinit.d1, b_preinit.d0, shiftcount);
 #endif
   }
-  // now the params that change everytime
+  // now the params that change every time
   status = clSetKernelArg(l_kernel,
                     1,
                     sizeof(int96),
@@ -2133,7 +2140,7 @@ __kernel void cl_barrett32_77_gs(__private uint exp, const int96_t k_base, const
       b_in.s[7], b_in.s[6], b_in.s[5], b_in.s[4], b_in.s[3], b_in.s[2], b_in.s[1], b_in.s[0], shiftcount);
 #endif
 
-  // now the params that change everytime
+  // now the params that change every time
   status = clSetKernelArg(kernel,
                     1,
                     sizeof(int75),
@@ -2189,7 +2196,7 @@ __kernel void cl_barrett32_77_gs(__private uint exp, const int96_t k_base, const
       b_preinit.d5, b_preinit.d4, b_preinit.d3, b_preinit.d2, b_preinit.d1, b_preinit.d0, shiftcount);
 #endif
 
-  // now the params that change everytime
+  // now the params that change every time
   status = clSetKernelArg(kernel,
                     1,
                     sizeof(int96),
@@ -2224,7 +2231,7 @@ __kernel void cl_barrett32_77_gs(__private uint exp, const int96_t k_base, const
   static cl_event run_event = NULL;
 #ifndef CL_PERFORMANCE_INFO
   static cl_uint flush_counter=1;
-  static cl_uint event_step = max(1, mystuff.flush / 2); // When to set the event for waiting
+  static cl_uint event_step = MAX(1, mystuff.flush / 2); // When to set the event for waiting
   cl_event  *p_event = NULL;
 #endif
 
@@ -2577,15 +2584,15 @@ int tf_class_opencl(cl_ulong k_min, cl_ulong k_max, mystuff_t *mystuff, enum GPU
 #ifdef RAW_GPU_BENCH
   shared_mem_required = 100;            // no sieving = 100%
 #else
-  if (mystuff->gpu_sieve_primes < 54) shared_mem_required = 100;  // no sieving = 100%
-  else if (mystuff->gpu_sieve_primes < 310) shared_mem_required = 50;  // 54 primes expect 48.30%
-  else if (mystuff->gpu_sieve_primes < 1846) shared_mem_required = 38;  // 310 primes expect 35.50%
-  else if (mystuff->gpu_sieve_primes < 21814) shared_mem_required = 30;  // 1846 primes expect 28.10%
-  else if (mystuff->gpu_sieve_primes < 34101) shared_mem_required = 24;  // 21814 primes expect 21.93%
-  else if (mystuff->gpu_sieve_primes < 63797) shared_mem_required = 23;  // 34101 primes expect 20.94%
-  else if (mystuff->gpu_sieve_primes < 115253) shared_mem_required = 22;    // 63797 primes expect 19.87%
-  else if (mystuff->gpu_sieve_primes < 239157) shared_mem_required = 21;    // 115253 primes expect 18.98%
-  else if (mystuff->gpu_sieve_primes < 550453) shared_mem_required = 20;    // 239257 primes expect 17.99%
+  if (mystuff->sieve_primes < 54) shared_mem_required = 100;  // no sieving = 100%
+  else if (mystuff->sieve_primes < 310) shared_mem_required = 50;  // 54 primes expect 48.30%
+  else if (mystuff->sieve_primes < 1846) shared_mem_required = 38;  // 310 primes expect 35.50%
+  else if (mystuff->sieve_primes < 21814) shared_mem_required = 30;  // 1846 primes expect 28.10%
+  else if (mystuff->sieve_primes < 34101) shared_mem_required = 24;  // 21814 primes expect 21.93%
+  else if (mystuff->sieve_primes < 63797) shared_mem_required = 23;  // 34101 primes expect 20.94%
+  else if (mystuff->sieve_primes < 115253) shared_mem_required = 22;    // 63797 primes expect 19.87%
+  else if (mystuff->sieve_primes < 239157) shared_mem_required = 21;    // 115253 primes expect 18.98%
+  else if (mystuff->sieve_primes < 550453) shared_mem_required = 20;    // 239257 primes expect 17.99%
   else shared_mem_required = 19;          // 550453 primes expect 16.97%
 #endif
   shared_mem_required = mystuff->gpu_sieve_processing_size * sizeof (short) * shared_mem_required / 100;
@@ -2659,7 +2666,7 @@ int tf_class_opencl(cl_ulong k_min, cl_ulong k_max, mystuff_t *mystuff, enum GPU
               else
                 ind++;
               // simple verify ...
-/*              for (cl_uint p=13; p<mystuff->gpu_sieve_primes; p+=2)
+/*              for (cl_uint p=13; p<mystuff->sieve_primes; p+=2)
               {
                 cl_ulong rem=k_min%p + ((cl_ulong)pos*mystuff->num_classes)%p;
                 rem=(2*mystuff->exponent*rem +1)%p;
@@ -2680,7 +2687,7 @@ int tf_class_opencl(cl_ulong k_min, cl_ulong k_max, mystuff_t *mystuff, enum GPU
         }
         if (peak < (double) ind * 100.0 / (double) pos) peak=(double) ind * 100.0 / (double) pos;
         printf("bit-extract: %u/%u words (%u bits) processed, %u bits set (%f%% -- max=%f%% @ %u).\n",
-          i, mystuff->gpu_sieve_size/32, pos, ind, (double) ind * 100.0 / (double) pos, peak, mystuff->gpu_sieve_primes);
+          i, mystuff->gpu_sieve_size/32, pos, ind, (double) ind * 100.0 / (double) pos, peak, mystuff->sieve_primes);
 #endif
         // Now let the GPU trial factor the candidates that survived the sieving
 
